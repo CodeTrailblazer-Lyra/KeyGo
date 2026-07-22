@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KeyGo</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+    <style>
+        [v-cloak] { display: none !important; }
+        /* 弹窗内激活码横向不折行 */
+        .claim-code-display {
+            font-size:1.3rem; font-weight:700; font-family:monospace;
+            letter-spacing:2px; padding:0.75rem 1.5rem;
+            background:#f3f4f6; border-radius:8px; display:inline-block;
+            color:#059669; margin-top:0.25rem;
+            white-space:nowrap; overflow-x:auto; max-width:100%;
+        }
+        .modal-dialog.wide { max-width:520px; }
+        /* 角色标签 */
+        .role-badge { display:inline-block; padding:2px 10px; border-radius:999px;
+                       font-size:0.75rem; font-weight:600; }
+        .role-badge.super { background:#eef2ff; color:var(--primary); }
+        .role-badge.admin { background:#ecfdf5; color:var(--success); }
+        .role-badge.user { background:var(--gray-100); color:var(--gray-500); }
+        /* 红点提示 - 定位在导航链接右上角 */
+        .navbar-link {
+            position: relative;
+        }
+        .navbar-link[data-badge]::after {
+            content:attr(data-badge);
+            position:absolute; top:6px; right:-4px;
+            min-width:18px; height:18px;
+            background:#ef4444; color:#fff;
+            font-size:11px; font-weight:700;
+            display:flex; align-items:center; justify-content:center;
+            border-radius:999px; padding:0 5px;
+            box-shadow:0 2px 6px rgba(239,68,68,0.4);
+            animation:pulse-dot 2s ease-in-out infinite;
+            line-height:1;
+        }
+        @keyframes pulse-dot {
+            0%,100% { transform:scale(1); }
+            50% { transform:scale(1.15); }
+        }
+        /* 右下角通知 */
+        .toast-container {
+            position:fixed; bottom:1.5rem; right:1.5rem;
+            z-index:3000; display:flex; flex-direction:column; gap:0.75rem;
+            pointer-events:none;
+        }
+        .toast {
+            pointer-events:auto;
+            display:flex; align-items:center; gap:0.75rem;
+            background:#fff; border-radius:var(--radius);
+            padding:1rem 1.25rem;
+            box-shadow:0 8px 32px rgba(0,0,0,0.15);
+            border-left:4px solid var(--primary);
+            max-width:380px;
+            animation:slideInRight 0.4s cubic-bezier(0.34,1.56,0.64,1);
+            cursor:pointer;
+        }
+        .toast-icon { width:40px; height:40px; border-radius:50%;
+                       background:var(--primary-bg); color:var(--primary);
+                       display:flex; align-items:center; justify-content:center;
+                       font-size:1.25rem; flex-shrink:0; }
+        .toast-body { flex:1; min-width:0; }
+        .toast-title { font-size:0.9rem; font-weight:600; color:var(--gray-900); }
+        .toast-desc { font-size:0.8rem; color:var(--gray-500); margin-top:2px; }
+        .toast-close { background:none; border:none; color:var(--gray-400);
+                        cursor:pointer; font-size:1.1rem; padding:0.25rem;
+                        transition:var(--transition); }
+        .toast-close:hover { color:var(--gray-600); }
+        @keyframes slideInRight {
+            from { opacity:0; transform:translateX(100px); }
+            to { opacity:1; transform:translateX(0); }
+        }
+        .opacity-5 { opacity:0.5; }
+    </style>
+</head>
+<body>
+
+<div id="app" v-cloak>
+    <!-- ========== 导航栏 ========== -->
+    <nav class="navbar">
+        <a class="navbar-brand" href="#" @click.prevent="goView('fetch')">
+            <span class="navbar-brand-icon">&#x1F511;</span>
+            <span>KeyGo</span>
+        </a>
+        <button class="navbar-toggle" @click="menuOpen = !menuOpen">&#x2630;</button>
+        <ul class="navbar-menu" :class="{ open: menuOpen }">
+            <li class="navbar-item">
+                <a class="navbar-link" :class="{ active: view === 'fetch' }" href="#"
+                   @click.prevent="goView('fetch')">申领</a>
+            </li>
+            <!-- 仅管理员可见 -->
+            <li class="navbar-item" v-if="isAdmin">
+                <a class="navbar-link" :class="{ active: view === 'list' }" href="#"
+                   @click.prevent="goView('list')">查询</a>
+            </li>
+            <li class="navbar-item" v-if="isAdmin">
+                <a class="navbar-link" :class="{ active: view === 'stats' }" href="#"
+                   @click.prevent="goView('stats')">统计</a>
+            </li>
+            <li class="navbar-item" v-if="isAdmin">
+                <a class="navbar-link" :class="{ active: view === 'admin' }" href="#"
+                   @click.prevent="goView('admin')"
+                   :data-badge="pendingCount > 0 ? String(pendingCount) : null">
+                    管理
+                </a>
+            </li>
+            <li class="navbar-item navbar-user">
+                <span>{{ username }}</span>
+                <span v-if="role === 'ROLE_SUPER_ADMIN'" class="role-badge super" style="margin-left:6px;">超级管理员</span>
+                <span v-else-if="role === 'ROLE_ADMIN'" class="role-badge admin" style="margin-left:6px;">管理员</span>
+                <span v-else class="role-badge user" style="margin-left:6px;">普通用户</span>
+                <form th:action="@{/logout}" method="post" style="display:inline;">
+                    <button type="submit" class="logout-btn">退出</button>
+                </form>
+            </li>
+        </ul>
+    </nav>
+
+    <main class="container">
+
+        <!-- ====== 申领页 ====== -->
+        <template v-if="view === 'fetch'">
+            <div class="page-header">
+                <h1 class="page-title">激活码申领</h1>
+                <p class="page-subtitle">点击按钮获取一个可用的激活码</p>
+            </div>
+            <div class="stats-grid">
+                <div class="stat-card"><div class="stat-icon total">&#x1F4E6;</div><div class="stat-info"><div class="stat-label">总数</div><div class="stat-value">{{ stats.total }}</div></div></div>
+                <div class="stat-card"><div class="stat-icon available">&#x2705;</div><div class="stat-info"><div class="stat-label">可用</div><div class="stat-value">{{ stats.available }}</div></div></div>
+                <div class="stat-card"><div class="stat-icon used">&#x1F4CC;</div><div class="stat-info"><div class="stat-label">已使用</div><div class="stat-value">{{ stats.used }}</div></div></div>
+            </div>
+            <div class="card">
+                <div class="card-body"><div class="claim-section">
+                    <div class="claim-icon">&#x1F511;</div>
+                    <h2 class="claim-title">申领激活码</h2>
+                    <p class="claim-desc">当前可用激活码 {{ stats.available }} 个</p>
+                    <button type="button" class="btn btn-primary claim-btn"
+                            :disabled="stats.available === 0" @click="showClaimModal = true">立即申领</button>
+                    <p v-if="stats.available === 0" style="margin-top:1rem;color:var(--danger);font-size:0.85rem;">
+                        当前暂无可用激活码，请联系管理员补充</p>
+                </div></div>
+            </div>
+        </template>
+
+        <!-- ====== 查询页（管理员） ====== -->
+        <template v-if="view === 'list'">
+            <div class="page-header"><h1 class="page-title">激活码查询</h1><p class="page-subtitle">激活码列表与状态管理</p></div>
+            <div v-if="listAlert" class="alert alert-success fade-in">{{ listAlert }}</div>
+
+            <!-- 导入 + 批量操作 -->
+            <div class="stats-grid" style="margin-bottom:1.25rem;">
+                <div class="stat-card" style="cursor:pointer;" @click="showImportModal = true">
+                    <div class="stat-icon total">&#x1F4C1;</div>
+                    <div class="stat-info"><div class="stat-label">Excel导入</div><div class="stat-value" style="font-size:1rem;">点击上传</div></div>
+                </div>
+                <div class="stat-card" style="cursor:pointer;" :class="{ 'opacity-5': selectedIds.length === 0 }"
+                     @click="batchUse">
+                    <div class="stat-icon used">&#x1F4CC;</div>
+                    <div class="stat-info"><div class="stat-label">批量标记</div>
+                        <div class="stat-value" style="font-size:1rem;">已选 {{ selectedIds.length }} 项</div></div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon available">&#x2705;</div>
+                    <div class="stat-info"><div class="stat-label">可用</div><div class="stat-value">{{ listStats.available }}</div></div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">激活码列表</div>
+                    <div class="search-bar">
+                        <div class="filter-tabs">
+                            <a class="filter-tab" :class="{ active: listFilter === '' }" href="#" @click.prevent="loadCodes('')">全部</a>
+                            <a class="filter-tab" :class="{ active: listFilter === 'unused' }" href="#" @click.prevent="loadCodes('unused')">未使用</a>
+                            <a class="filter-tab" :class="{ active: listFilter === 'used' }" href="#" @click.prevent="loadCodes('used')">已使用</a>
+                        </div>
+                        <div style="display:flex;gap:0.5rem;">
+                            <input type="text" class="search-input" v-model="listKeyword" placeholder="搜索..." @keyup.enter="loadCodes(listFilter)" />
+                            <button type="button" class="btn btn-outline btn-sm" @click="loadCodes(listFilter)">搜索</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body" style="padding:0;">
+                    <div class="table-wrapper"><table class="table">
+                        <thead><tr><th style="width:40px;"><input type="checkbox" :checked="allSelected" @change="toggleAll"></th><th>#</th><th>激活码</th><th>状态</th><th>创建时间</th><th>申领时间</th><th style="text-align:center;">操作</th></tr></thead>
+                        <tbody>
+                            <tr v-if="codes.length === 0"><td colspan="7" class="table-empty"><div class="empty-state"><div class="empty-state-icon">&#x1F4ED;</div><div class="empty-state-text">暂无数据</div></div></td></tr>
+                            <tr v-for="code in codes" :key="code.id" class="row-hover">
+                                <td><input type="checkbox" :value="code.id" v-model="selectedIds" :disabled="code.used"></td>
+                                <td>{{ code.id }}</td>
+                                <td><span class="code-value">{{ code.code }}</span></td>
+                                <td><span v-if="code.used" class="badge badge-danger">已使用</span><span v-else class="badge badge-success">未使用</span></td>
+                                <td><span class="time-text">{{ formatTime(code.createTime) }}</span></td>
+                                <td><span v-if="code.fetchTime" class="time-text">{{ formatTime(code.fetchTime) }}</span><span v-else style="color:var(--gray-400);">—</span></td>
+                                <td style="text-align:center;">
+                                    <button v-if="!code.used" type="button" class="btn btn-warning btn-sm btn-mark" @click="confirmMark(code.id)">标记已使用</button>
+                                    <span v-else style="color:var(--gray-400);font-size:0.85rem;">—</span>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table></div>
+                </div>
+            </div>
+        </template>
+
+        <!-- ====== 统计页（管理员） ====== -->
+        <template v-if="view === 'stats'">
+            <div class="page-header"><h1 class="page-title">数据统计</h1><p class="page-subtitle">激活码使用概览</p></div>
+            <div class="stats-overview">
+                <div class="stats-card-lg"><div class="stats-icon-lg total">&#x1F4E6;</div><div class="stats-label">总数</div><div class="stats-number total-num">{{ stats.total }}</div><div class="progress-bar-container"><div class="progress-bar-bg"><div class="progress-bar-fill available-fill" :style="'width:100%'"></div></div></div></div>
+                <div class="stats-card-lg"><div class="stats-icon-lg available">&#x2705;</div><div class="stats-label">可用</div><div class="stats-number available-num">{{ stats.available }}</div><div class="progress-bar-container"><div class="progress-bar-bg"><div class="progress-bar-fill available-fill" :style="'width:' + (stats.total > 0 ? (stats.available/stats.total*100) : 0) + '%'"></div></div></div></div>
+                <div class="stats-card-lg"><div class="stats-icon-lg used">&#x1F4CC;</div><div class="stats-label">已使用</div><div class="stats-number used-num">{{ stats.used }}</div><div class="progress-bar-container"><div class="progress-bar-bg"><div class="progress-bar-fill used-fill" :style="'width:' + (stats.total > 0 ? (stats.used/stats.total*100) : 0) + '%'"></div></div></div></div>
+            </div>
+            <div class="card" style="margin-top:2rem;">
+                <div class="card-header"><div class="card-title">使用率分析</div></div>
+                <div class="card-body">
+                    <div v-if="stats.total > 0" class="stats-grid" style="margin-bottom:0;">
+                        <div class="stat-card" style="border:1px solid var(--warning-bg);">
+                            <div class="stat-icon used">&#x1F4CA;</div><div class="stat-info"><div class="stat-label">使用率</div><div class="stat-value" style="color:var(--warning);">{{ (stats.used/stats.total*100).toFixed(1) }}%</div></div></div>
+                        <div class="stat-card" style="border:1px solid var(--success-bg);">
+                            <div class="stat-icon available">&#x1F4CA;</div><div class="stat-info"><div class="stat-label">可用率</div><div class="stat-value" style="color:var(--success);">{{ (stats.available/stats.total*100).toFixed(1) }}%</div></div></div>
+                    </div>
+                    <div v-else class="empty-state"><div class="empty-state-icon">&#x1F4ED;</div><div class="empty-state-text">暂无数据</div></div>
+                </div>
+            </div>
+        </template>
+
+        <!-- ====== 用户管理页（管理员） ====== -->
+        <template v-if="view === 'admin'">
+            <div class="page-header"><h1 class="page-title">用户管理</h1><p class="page-subtitle">审核注册、角色管理</p></div>
+
+            <!-- 待审核 -->
+            <div class="card" style="margin-bottom:1.5rem;" v-if="pendingUsers.length > 0">
+                <div class="card-header"><div class="card-title">待审核用户 ({{ pendingUsers.length }})</div></div>
+                <div class="card-body" style="padding:0;">
+                    <div class="table-wrapper"><table class="table">
+                        <thead><tr><th>用户名</th><th>注册时间</th><th style="text-align:center;">操作</th></tr></thead>
+                        <tbody>
+                            <tr v-for="u in pendingUsers" :key="u.id">
+                                <td><strong>{{ u.username }}</strong></td>
+                                <td><span class="time-text">{{ formatTime(u.createTime) }}</span></td>
+                                <td style="text-align:center;">
+                                    <button class="btn btn-success btn-sm" @click="approveUser(u.id)" style="margin-right:6px;">通过</button>
+                                    <button class="btn btn-danger btn-sm" @click="rejectUser(u.id)">拒绝</button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table></div>
+                </div>
+            </div>
+
+            <!-- 全部用户 -->
+            <div class="card">
+                <div class="card-header"><div class="card-title">全部用户</div></div>
+                <div class="card-body" style="padding:0;">
+                    <div class="table-wrapper"><table class="table">
+                        <thead><tr><th>#</th><th>用户名</th><th>角色</th><th>状态</th><th>注册时间</th><th style="text-align:center;">操作</th></tr></thead>
+                        <tbody>
+                            <tr v-for="u in allUsers" :key="u.id">
+                                <td>{{ u.id }}</td>
+                                <td><strong>{{ u.username }}</strong></td>
+                                <td><span :class="'role-badge ' + (u.role==='ROLE_SUPER_ADMIN'?'super':u.role==='ROLE_ADMIN'?'admin':'user')">{{ roleLabel(u.role) }}</span></td>
+                                <td><span v-if="u.approved" class="badge badge-success">已审核</span><span v-else class="badge badge-warning">待审</span></td>
+                                <td><span class="time-text">{{ formatTime(u.createTime) }}</span></td>
+                                <td style="text-align:center;white-space:nowrap;">
+                                    <select v-if="canChangeRole(u)" v-model="u.role" @change="changeUserRole(u)" style="padding:4px 8px;border:1px solid var(--gray-200);border-radius:6px;font-size:0.8rem;">
+                                        <option value="ROLE_USER">普通用户</option>
+                                        <option value="ROLE_ADMIN">管理员</option>
+                                        <option value="ROLE_SUPER_ADMIN" v-if="isSuperAdmin">超级管理员</option>
+                                    </select>
+                                    <span v-else style="color:var(--gray-400);font-size:0.8rem;">—</span>
+                                    <button v-if="isSuperAdmin && u.username !== username" type="button"
+                                            class="btn btn-danger btn-sm" style="margin-left:6px;"
+                                            @click="confirmDeleteUser(u)">删除</button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table></div>
+                </div>
+            </div>
+        </template>
+    </main>
+
+    <!-- ========== 申领弹窗（加宽） ========== -->
+    <div class="modal-overlay" :class="{ active: showClaimModal }" @click.self="closeClaimModal">
+        <div class="modal-dialog wide">
+            <div class="modal-header"><h3 class="modal-title">{{ claimTitle }}</h3></div>
+            <div class="modal-body">
+                <template v-if="!claimDone">
+                    <p>您即将申领一个激活码，确认继续吗？</p>
+                    <p style="font-size:0.85rem;color:var(--gray-500);margin-top:0.5rem;">
+                        可用 <strong>{{ stats.available }}</strong> 个</p>
+                </template>
+                <template v-else>
+                    <div style="text-align:center;padding:1rem 0;">
+                        <div style="font-size:2.5rem;margin-bottom:0.75rem;">
+                            <span v-if="claimOk">&#x1F389;</span><span v-else>&#x1F605;</span></div>
+                        <div style="font-size:1rem;font-weight:600;margin-bottom:0.75rem;">
+                            <span v-if="claimOk">恭喜，您已成功申领：</span><span v-else>申领失败</span></div>
+                        <div v-if="claimOk" class="claim-code-display">{{ claimCode }}</div>
+                        <div v-else style="color:var(--danger);font-weight:500;">{{ claimError }}</div>
+                    </div>
+                </template>
+            </div>
+            <div class="modal-footer">
+                <button v-if="!claimDone" type="button" class="btn btn-outline" @click="closeClaimModal">取消</button>
+                <button v-if="!claimDone" type="button" class="btn btn-primary" :disabled="claiming" @click="doClaim">{{ claiming ? '申领中...' : '确认申领' }}</button>
+                <button v-else type="button" class="btn btn-primary" @click="closeClaimModal">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== 标记弹窗 ========== -->
+    <div class="modal-overlay" :class="{ active: showMarkModal }" @click.self="showMarkModal = false">
+        <div class="modal-dialog"><div class="modal-header"><h3 class="modal-title">确认操作</h3></div>
+            <div class="modal-body"><p>确认将该激活码标记为已使用？</p></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" @click="showMarkModal = false">取消</button>
+                <button type="button" class="btn btn-warning" @click="doMark">确认标记</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== 导入弹窗 ========== -->
+    <div class="modal-overlay" :class="{ active: showImportModal }" @click.self="showImportModal = false">
+        <div class="modal-dialog">
+            <div class="modal-header"><h3 class="modal-title">Excel 导入激活码</h3></div>
+            <div class="modal-body">
+                <p style="margin-bottom:1rem;">请上传 .xlsx 文件，第一列填写激活码：</p>
+                <input type="file" accept=".xlsx" ref="fileInput"
+                       style="display:block;width:100%;padding:0.5rem;border:1.5px solid var(--gray-200);border-radius:8px;font-size:0.9rem;">
+                <div v-if="importResult" style="margin-top:1rem;padding:0.75rem;border-radius:8px;font-size:0.9rem;font-weight:500;"
+                     :style="{ background: importOk ? 'var(--success-bg)' : 'var(--danger-bg)', color: importOk ? '#065f46' : '#991b1b' }">
+                    {{ importResult }}
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" @click="showImportModal = false; importResult=''">关闭</button>
+                <button type="button" class="btn btn-primary" @click="doImport" :disabled="importing">
+                    {{ importing ? '导入中...' : '开始导入' }}
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== 删除用户确认弹窗 ========== -->
+    <div class="modal-overlay" :class="{ active: showDeleteModal }" @click.self="showDeleteModal = false">
+        <div class="modal-dialog">
+            <div class="modal-header"><h3 class="modal-title">确认删除</h3></div>
+            <div class="modal-body">
+                <p>确认删除用户 <strong>{{ deleteTarget?.username }}</strong>？此操作不可撤销。</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" @click="showDeleteModal = false">取消</button>
+                <button type="button" class="btn btn-danger" @click="doDeleteUser">确认删除</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== 右下角通知 ========== -->
+    <div class="toast-container">
+        <div v-for="(t, i) in toasts" :key="i" class="toast" @click="goToast(t)">
+            <div class="toast-icon">&#x1F514;</div>
+            <div class="toast-body">
+                <div class="toast-title">{{ t.title }}</div>
+                <div class="toast-desc">{{ t.desc }}</div>
+            </div>
+            <button class="toast-close" @click.stop="removeToast(i)">&times;</button>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"></script>
+<script th:inline="javascript">
+    /*<![CDATA[*/
+    const INIT = {
+        total: [[${total}]],
+        available: [[${available}]],
+        used: [[${used}]],
+        username: [[${#authentication.name}]]
+    };
+    /*]]>*/
+
+    const { createApp } = Vue;
+
+    createApp({
+        data() {
+            return {
+                menuOpen: false,
+                view: 'fetch',
+                // 用户
+                username: INIT.username,
+                role: '',
+                isAdmin: false,
+                isSuperAdmin: false,
+                // stats
+                stats: { total: INIT.total, available: INIT.available, used: INIT.used },
+                // 申领弹窗
+                showClaimModal: false, claimDone: false, claiming: false,
+                claimOk: false, claimCode: '', claimError: '',
+                // 查询
+                codes: [], listFilter: '', listKeyword: '', listStats: { total: 0, available: 0, used: 0 }, listAlert: '',
+                // 标记
+                showMarkModal: false, markId: null,
+                // 用户管理
+                pendingUsers: [], allUsers: [],
+                pendingCount: 0,
+                toasts: [],
+                pollTimer: null,
+                notifiedPending: false,
+                // 导入
+                showImportModal: false,
+                importing: false,
+                importResult: '',
+                importOk: false,
+                // 批量标记
+                selectedIds: [],
+                // 删除用户
+                showDeleteModal: false,
+                deleteTarget: null,
+            };
+        },
+        computed: {
+            claimTitle() {
+                if (!this.claimDone) return '确认申领';
+                return this.claimOk ? '申领成功' : '申领失败';
+            },
+            allSelected() {
+                var available = this.codes.filter(c => !c.used);
+                return available.length > 0 && this.selectedIds.length === available.length;
+            }
+        },
+        mounted() {
+            this.loadUserInfo();
+            // 每 30 秒轮询待审核用户数
+            this.pollTimer = setInterval(() => { this.checkPending(); }, 30000);
+        },
+        beforeUnmount() {
+            if (this.pollTimer) clearInterval(this.pollTimer);
+        },
+        methods: {
+            // ----- 用户信息 -----
+            async loadUserInfo() {
+                try {
+                    const resp = await fetch('/admin/api/me');
+                    const data = await resp.json();
+                    this.role = data.role || '';
+                    this.isSuperAdmin = data.role === 'ROLE_SUPER_ADMIN';
+                    this.isAdmin = data.role === 'ROLE_ADMIN' || this.isSuperAdmin;
+                    // 加载后立即检查待审核
+                    if (this.isAdmin) {
+                        this.checkPending();
+                    }
+                } catch { /* ignore */ }
+            },
+
+            // ----- 待审核轮询 -----
+            async checkPending() {
+                try {
+                    const resp = await fetch('/admin/api/users/pending');
+                    if (!resp.ok) return;
+                    const list = await resp.json();
+                    this.pendingCount = list.length;
+                    // 管理员登录后首次发现待审核 -> 弹通知
+                    if (this.pendingCount > 0 && !this.notifiedPending) {
+                        this.notifiedPending = true;
+                        this.addToast({
+                            title: '待审核用户',
+                            desc: '有 ' + this.pendingCount + ' 个新注册用户等待审核',
+                            view: 'admin'
+                        });
+                    }
+                } catch { /* ignore */ }
+            },
+
+            // ----- 通知 -----
+            addToast(t) {
+                this.toasts.push(t);
+                // 5 秒后自动移除
+                setTimeout(() => {
+                    var idx = this.toasts.indexOf(t);
+                    if (idx > -1) this.toasts.splice(idx, 1);
+                }, 5000);
+            },
+            removeToast(i) {
+                this.toasts.splice(i, 1);
+            },
+            goToast(t) {
+                if (t.view) this.goView(t.view);
+            },
+
+            // ----- 视图切换 -----
+            goView(v) {
+                this.view = v;
+                this.menuOpen = false;
+                if (v === 'list') this.loadCodes('');
+                if (v === 'stats') this.loadStats();
+                if (v === 'admin') { this.loadUsers(); this.notifiedPending = false; }
+            },
+
+            // ----- 申领 -----
+            async doClaim() {
+                this.claiming = true;
+                try {
+                    const resp = await fetch('/admin/code/claim-json', { method: 'POST' });
+                    const data = await resp.json();
+                    this.claimDone = true;
+                    this.claimOk = data.success;
+                    if (data.success) this.claimCode = data.code;
+                    else this.claimError = data.error;
+                    this.stats = { total: data.total, available: data.available, used: data.used };
+                } catch (err) {
+                    this.claimDone = true; this.claimOk = false;
+                    this.claimError = err.message || '网络异常';
+                } finally { this.claiming = false; }
+            },
+            closeClaimModal() {
+                this.showClaimModal = false;
+                setTimeout(() => { this.claimDone = false; this.claiming = false; }, 300);
+            },
+
+            // ----- 查询 -----
+            async loadCodes(filter) {
+                this.listFilter = filter || '';
+                const params = new URLSearchParams();
+                if (this.listFilter) params.set('status', this.listFilter);
+                if (this.listKeyword) params.set('keyword', this.listKeyword);
+                try {
+                    const resp = await fetch('/admin/code/api/list?' + params.toString());
+                    if (!resp.ok) return;
+                    const data = await resp.json();
+                    this.codes = data.codes || [];
+                    this.listStats = { total: data.total, available: data.available, used: data.used };
+                } catch { /* ignore */ }
+            },
+            confirmMark(id) { this.markId = id; this.showMarkModal = true; },
+            async doMark() {
+                if (!this.markId) return;
+                try {
+                    const resp = await fetch('/admin/code/api/use/' + this.markId, { method: 'POST' });
+                    if (!resp.ok) return;
+                    const data = await resp.json();
+                    if (data.success) {
+                        this.listAlert = data.message;
+                        setTimeout(() => { this.listAlert = ''; }, 3000);
+                        this.loadCodes(this.listFilter);
+                    }
+                } catch { /* ignore */ }
+                this.showMarkModal = false; this.markId = null;
+            },
+
+            // ----- 统计 -----
+            async loadStats() {
+                try {
+                    const resp = await fetch('/admin/code/api/stats');
+                    if (!resp.ok) return;
+                    this.stats = await resp.json();
+                } catch { /* ignore */ }
+            },
+
+            // ----- 用户管理 -----
+            async loadUsers() {
+                try {
+                    const [pendingResp, allResp] = await Promise.all([
+                        fetch('/admin/api/users/pending'),
+                        fetch('/admin/api/users'),
+                    ]);
+                    if (pendingResp.ok) {
+                        this.pendingUsers = await pendingResp.json();
+                        this.pendingCount = this.pendingUsers.length;
+                    }
+                    if (allResp.ok) this.allUsers = await allResp.json();
+                } catch { /* ignore */ }
+            },
+            async approveUser(id) {
+                try {
+                    const resp = await fetch('/admin/api/users/' + id + '/approve', { method: 'POST' });
+                    if (!resp.ok) { console.error('approve HTTP', resp.status); return; }
+                    const data = await resp.json();
+                    if (data.success) this.loadUsers();
+                    else console.error('approve failed', data);
+                } catch (err) { console.error('approve error', err); }
+            },
+            async rejectUser(id) {
+                try {
+                    const resp = await fetch('/admin/api/users/' + id + '/reject', { method: 'POST' });
+                    if (!resp.ok) { console.error('reject HTTP', resp.status); return; }
+                    const data = await resp.json();
+                    if (data.success) this.loadUsers();
+                    else console.error('reject failed', data);
+                } catch (err) { console.error('reject error', err); }
+            },
+            canChangeRole(u) {
+                if (this.isSuperAdmin) return u.username !== this.username;
+                if (this.role === 'ROLE_ADMIN') return u.role === 'ROLE_USER' || (!u.approved);
+                return false;
+            },
+            async changeUserRole(u) {
+                const params = new URLSearchParams();
+                params.set('role', u.role);
+                await fetch('/admin/api/users/' + u.id + '/role', { method: 'POST', body: params });
+            },
+            roleLabel(r) {
+                return { 'ROLE_SUPER_ADMIN': '超级管理员', 'ROLE_ADMIN': '管理员', 'ROLE_USER': '普通用户' }[r] || r;
+            },
+
+            // ----- 批量标记 -----
+            toggleAll() {
+                if (this.allSelected) {
+                    this.selectedIds = [];
+                } else {
+                    this.selectedIds = this.codes.filter(c => !c.used).map(c => c.id);
+                }
+            },
+            async batchUse() {
+                if (this.selectedIds.length === 0) return;
+                try {
+                    const resp = await fetch('/admin/code/api/batch-use', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(this.selectedIds)
+                    });
+                    const data = await resp.json();
+                    if (data.success) {
+                        this.listAlert = '已批量标记 ' + data.count + ' 个激活码';
+                        setTimeout(() => { this.listAlert = ''; }, 3000);
+                        this.selectedIds = [];
+                        this.loadCodes(this.listFilter);
+                    }
+                } catch { /* ignore */ }
+            },
+
+            // ----- Excel 导入 -----
+            async doImport() {
+                var input = this.$refs.fileInput;
+                if (!input || !input.files || !input.files[0]) {
+                    this.importResult = '请选择文件';
+                    this.importOk = false;
+                    return;
+                }
+                this.importing = true;
+                this.importResult = '';
+                var formData = new FormData();
+                formData.append('file', input.files[0]);
+                try {
+                    const resp = await fetch('/admin/code/api/import', { method: 'POST', body: formData });
+                    const data = await resp.json();
+                    this.importOk = data.success;
+                    if (data.success) {
+                        this.importResult = '成功导入 ' + data.count + ' 个激活码';
+                        input.value = '';
+                        this.loadCodes(this.listFilter);
+                    } else {
+                        this.importResult = data.message || '导入失败';
+                    }
+                } catch (err) {
+                    this.importOk = false;
+                    this.importResult = '导入失败: ' + (err.message || '网络异常');
+                } finally {
+                    this.importing = false;
+                }
+            },
+
+            // ----- 删除用户 -----
+            confirmDeleteUser(u) {
+                this.deleteTarget = u;
+                this.showDeleteModal = true;
+            },
+            async doDeleteUser() {
+                if (!this.deleteTarget) return;
+                try {
+                    const resp = await fetch('/admin/api/users/' + this.deleteTarget.id, { method: 'DELETE' });
+                    const data = await resp.json();
+                    if (data.success) {
+                        this.loadUsers();
+                    }
+                } catch { /* ignore */ }
+                this.showDeleteModal = false;
+                this.deleteTarget = null;
+            },
+
+            // ----- 通用 -----
+            formatTime(ts) {
+                if (!ts) return '—';
+                const d = new Date(ts);
+                if (isNaN(d.getTime())) {
+                    const parts = ts.slice(0, 19).split('T');
+                    if (parts.length === 2) return parts[0] + ' ' + parts[1].slice(0, 5);
+                    return ts;
+                }
+                const pad = n => String(n).padStart(2, '0');
+                return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+            },
+        }
+    }).mount('#app');
+</script>
+</body>
+</html>

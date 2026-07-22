@@ -1,15 +1,16 @@
 spring:
-  application:
-    name: KeyGo
+  datasource:
+    url: jdbc:postgresql://172.18.0.2:5432/KeyGo
+    username: KeyGo
+    password: "My45P2TzzKzxpEse"
+    driver-class-name: org.postgresql.Driver
+  data:
+    redis:
+      host: 172.18.0.3
+      port: 6379
+      username: default
+      password: "redis_z7pzC6"
   jpa:
     hibernate:
       ddl-auto: validate
-    show-sql: true
-    properties:
-      hibernate:
-        format_sql: true
-        dialect: org.hibernate.dialect.PostgreSQLDialect
-  redis:
-  # redis公共参数，区分地址放各自环境文件
-
-# 日志、线程池、jackson、security 通用配置全部放这里
+    show-sql: false

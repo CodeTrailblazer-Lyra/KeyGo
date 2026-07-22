@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KeyGo</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+    <style>
+        [v-cloak] { display: none !important; }
+        .auth-tabs { display:flex; margin-bottom:1.5rem; border-bottom:1px solid var(--gray-100); }
+        .auth-tab { flex:1; text-align:center; padding:0.75rem; font-weight:600; font-size:0.9rem;
+                     cursor:pointer; color:var(--gray-400); transition:var(--transition);
+                     border:none; background:none; outline:none;
+                     position:relative; margin-bottom:-1px; }
+        .auth-tab::after { content:''; position:absolute; bottom:0; left:50%; transform:translateX(-50%) scaleX(0);
+                           width:60%; height:2px; background:#a78bfa; border-radius:1px;
+                           transition:var(--transition); }
+        .auth-tab:hover { color:var(--gray-600); background:var(--gray-50); border-radius:8px 8px 0 0; }
+        .auth-tab:focus-visible { outline:2px solid rgba(167,139,250,0.5); outline-offset:-2px; border-radius:8px 8px 0 0; }
+        .auth-tab.active { color:#6366f1; }
+        .auth-tab.active::after { transform:translateX(-50%) scaleX(1); }
+        .reg-msg { text-align:center; padding:0.75rem; border-radius:14px;
+                    margin-bottom:1rem; font-size:0.85rem; font-weight:500;
+                    position:relative; z-index:1; }
+        .reg-msg.ok { background:rgba(16,185,129,0.1); color:#059669; border:1px solid rgba(16,185,129,0.15); }
+        .reg-msg.err { background:rgba(239,68,68,0.08); color:#dc2626; border:1px solid rgba(239,68,68,0.12); }
+        .reg-notice { text-align:center; margin-top:1.25rem; padding:0.625rem 1rem;
+                       font-size:0.8rem; color:var(--gray-400);
+                       background:rgba(255,255,255,0.5);
+                       border-radius:14px; border:1px solid var(--gray-100);
+                       line-height:1.5; position:relative; z-index:1; backdrop-filter:blur(10px); }
+        .alert-success { background:rgba(16,185,129,0.1); color:#059669; border:1px solid rgba(16,185,129,0.15);
+                          padding:0.75rem 1rem; border-radius:14px; margin-bottom:1rem;
+                          font-size:0.85rem; text-align:center; position:relative; z-index:1; }
+    </style>
+</head>
+<body class="login-page">
+<div class="login-card" id="authApp" v-cloak>
+    <div class="login-header">
+        <div class="login-logo">&#x1F511;</div>
+        <h1 class="login-title">KeyGo</h1>
+        <p class="login-subtitle">激活码分发管理系统</p>
+    </div>
+
+    <div class="auth-tabs">
+        <button class="auth-tab" :class="{ active: tab === 'login' }" @click="tab='login'">登录</button>
+        <button class="auth-tab" :class="{ active: tab === 'register' }" @click="tab='register'">注册</button>
+    </div>
+
+    <!-- ═══ 登录 ═══ -->
+    <div v-if="tab === 'login'">
+        <div v-if="loginError" class="login-error">{{ loginError }}</div>
+        <div th:if="${param.logout}" class="alert alert-success" style="margin-bottom:1rem;">您已成功退出登录</div>
+
+        <form th:action="@{/login}" method="post">
+            <div class="form-group">
+                <label class="form-label" for="loginUser">用户名</label>
+                <div class="form-input-wrapper">
+                    <span class="form-input-icon">&#x1F464;</span>
+                    <input id="loginUser" name="username" type="text" class="form-input" placeholder="请输入用户名" required autofocus>
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="loginPwd">密码</label>
+                <div class="form-input-wrapper">
+                    <span class="form-input-icon">&#x1F512;</span>
+                    <input id="loginPwd" name="password" type="password" class="form-input" placeholder="请输入密码" required>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary login-btn">登 录</button>
+        </form>
+    </div>
+
+    <!-- ═══ 注册 ═══ -->
+    <div v-else>
+        <div v-if="regMsg" class="reg-msg" :class="regOk ? 'ok' : 'err'">{{ regMsg }}</div>
+
+        <form @submit.prevent="doRegister">
+            <div class="form-group">
+                <label class="form-label" for="regUser">用户名</label>
+                <div class="form-input-wrapper">
+                    <span class="form-input-icon">&#x1F464;</span>
+                    <input id="regUser" v-model="regUsername" type="text" class="form-input"
+                           placeholder="请输入用户名" required minlength="2" maxlength="50">
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="regPwd">密码</label>
+                <div class="form-input-wrapper">
+                    <span class="form-input-icon">&#x1F512;</span>
+                    <input id="regPwd" v-model="regPassword" type="password" class="form-input"
+                           placeholder="请输入密码" required minlength="4">
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="regPwd2">确认密码</label>
+                <div class="form-input-wrapper">
+                    <span class="form-input-icon">&#x1F512;</span>
+                    <input id="regPwd2" v-model="regPassword2" type="password" class="form-input"
+                           placeholder="再次输入密码" required minlength="4"
+                           @input="regPwdMatch = regPassword === regPassword2">
+                </div>
+                <small v-if="regPassword2 && !regPwdMatch"
+                       style="color:var(--danger);font-size:0.75rem;margin-top:0.25rem;display:block;">两次密码不一致</small>
+            </div>
+            <button type="submit" class="btn btn-primary login-btn" :disabled="regLoading || !regPwdMatch">
+                {{ regLoading ? '注册中...' : '注 册' }}
+            </button>
+        </form>
+        <p class="reg-notice">
+            注册后需管理员审核通过方可登录
+        </p>
+    </div>
+
+    <div class="login-footer">KeyGo Activation Code System</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"></script>
+<script>
+    const { createApp } = Vue;
+    createApp({
+        data() {
+            return {
+                tab: 'login',
+                regUsername: '',
+                regPassword: '',
+                regPassword2: '',
+                regPwdMatch: true,
+                regMsg: '',
+                regOk: false,
+                regLoading: false,
+                loginError: '',
+            };
+        },
+        mounted() {
+            var params = new URLSearchParams(window.location.search);
+            this.loginError = params.get('error') || '';
+        },
+        methods: {
+            async doRegister() {
+                if (this.regPassword !== this.regPassword2) return;
+                this.regMsg = '';
+                this.regLoading = true;
+                try {
+                    const resp = await fetch('/register', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            username: this.regUsername.trim(),
+                            password: this.regPassword
+                        })
+                    });
+                    const data = await resp.json();
+                    this.regOk = data.success;
+                    this.regMsg = data.message;
+                    if (data.success) {
+                        this.regUsername = '';
+                        this.regPassword = '';
+                        this.regPassword2 = '';
+                    }
+                } catch (err) {
+                    this.regOk = false;
+                    this.regMsg = '网络错误，请重试';
+                } finally {
+                    this.regLoading = false;
+                }
+            }
+        }
+    }).mount('#authApp');
+</script>
+</body>
+</html>
