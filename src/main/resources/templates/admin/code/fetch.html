@@ -74,7 +74,30 @@
             from { opacity:0; transform:translateX(100px); }
             to { opacity:1; transform:translateX(0); }
         }
+        @keyframes slideBatch {
+            from { opacity:0; transform:translateX(-20px); }
+            to { opacity:1; transform:translateX(0); }
+        }
         .opacity-5 { opacity:0.5; }
+        /* 拖拽上传区域 */
+        .drop-zone {
+            border:2px dashed var(--gray-200);
+            border-radius:12px;
+            padding:2rem 1rem;
+            text-align:center;
+            cursor:pointer;
+            transition:var(--transition);
+            background:var(--gray-50);
+            margin-bottom:0.5rem;
+        }
+        .drop-zone:hover,
+        .drop-zone.drag-over {
+            border-color:#6366f1;
+            background:#eef2ff;
+        }
+        .drop-zone-icon { font-size:2rem; margin-bottom:0.5rem; }
+        .drop-zone-text { font-size:0.9rem; color:var(--gray-600); margin-bottom:0.25rem; }
+        .drop-zone-hint { font-size:0.75rem; color:var(--gray-400); }
     </style>
 </head>
 <body>
@@ -149,7 +172,6 @@
         <!-- ====== 查询页（管理员） ====== -->
         <template v-if="view === 'list'">
             <div class="page-header"><h1 class="page-title">激活码查询</h1><p class="page-subtitle">激活码列表与状态管理</p></div>
-            <div v-if="listAlert" class="alert alert-success fade-in">{{ listAlert }}</div>
 
             <!-- 导入 + 批量操作 -->
             <div class="stats-grid" style="margin-bottom:1.25rem;">
@@ -161,12 +183,6 @@
                     <div class="stat-icon total">&#x1F4E6;</div>
                     <div class="stat-info"><div class="stat-label">批量获取</div><div class="stat-value" style="font-size:1rem;">一键获取</div></div>
                 </div>
-                <div class="stat-card" style="cursor:pointer;" :class="{ 'opacity-5': selectedIds.length === 0 }"
-                     @click="batchUse">
-                    <div class="stat-icon used">&#x1F4CC;</div>
-                    <div class="stat-info"><div class="stat-label">批量标记</div>
-                        <div class="stat-value" style="font-size:1rem;">已选 {{ selectedIds.length }} 项</div></div>
-                </div>
                 <div class="stat-card">
                     <div class="stat-icon available">&#x2705;</div>
                     <div class="stat-info"><div class="stat-label">可用</div><div class="stat-value">{{ listStats.available }}</div></div>
@@ -176,6 +192,12 @@
                 <div class="card-header">
                     <div class="card-title">激活码列表</div>
                     <div class="search-bar">
+                        <template v-if="selectedIds.length >= 2">
+                            <span style="margin-right:0.75rem;font-size:0.85rem;color:var(--gray-500);white-space:nowrap;animation:slideBatch 0.35s cubic-bezier(0.34,1.56,0.64,1);">已选 {{ selectedIds.length }} 项</span>
+                            <button type="button" class="btn btn-warning btn-sm" style="margin-right:0.5rem;animation:slideBatch 0.35s cubic-bezier(0.34,1.56,0.64,1);" @click="batchUse">批量标记</button>
+                            <button v-if="isSuperAdmin" type="button" class="btn btn-outline btn-sm" style="margin-right:0.5rem;animation:slideBatch 0.35s cubic-bezier(0.34,1.56,0.64,1);" @click="batchUnuse">批量恢复</button>
+                            <button v-if="isSuperAdmin" type="button" class="btn btn-danger btn-sm" style="margin-right:0.75rem;animation:slideBatch 0.35s cubic-bezier(0.34,1.56,0.64,1);" @click="showBatchDeleteModal = true">批量删除</button>
+                        </template>
                         <div class="filter-tabs">
                             <a class="filter-tab" :class="{ active: listFilter === '' }" href="#" @click.prevent="loadCodes('')">全部</a>
                             <a class="filter-tab" :class="{ active: listFilter === 'unused' }" href="#" @click.prevent="loadCodes('unused')">未使用</a>
@@ -188,19 +210,20 @@
                     </div>
                 </div>
                 <div class="card-body" style="padding:0;">
-                    <div class="table-wrapper"><table class="table">
-                        <thead><tr><th style="width:40px;"><input type="checkbox" :checked="allSelected" @change="toggleAll"></th><th>#</th><th>激活码</th><th>状态</th><th>创建时间</th><th>获取时间</th><th style="text-align:center;">操作</th></tr></thead>
+                    <div class="table-wrapper" style="overflow-x:auto;"><table class="table" style="width:100%;min-width:680px;">
+                        <thead><tr><th style="width:4%;min-width:35px;"><input type="checkbox" :checked="allSelected" @change="toggleAll"></th><th style="width:5%;min-width:40px;">#</th><th style="width:28%;padding-left:10px;">激活码</th><th style="width:8%;min-width:60px;">状态</th><th style="width:16%;min-width:100px;">创建时间</th><th style="width:16%;min-width:100px;">获取时间</th><th style="width:23%;min-width:110px;text-align:center;">操作</th></tr></thead>
                         <tbody>
                             <tr v-if="codes.length === 0"><td colspan="7" class="table-empty"><div class="empty-state"><div class="empty-state-icon">&#x1F4ED;</div><div class="empty-state-text">暂无数据</div></div></td></tr>
                             <tr v-for="code in codes" :key="code.id" class="row-hover">
-                                <td><input type="checkbox" :value="code.id" v-model="selectedIds" :disabled="code.used"></td>
+                                <td><input type="checkbox" :value="code.id" v-model="selectedIds"></td>
                                 <td>{{ code.id }}</td>
-                                <td><span class="code-value">{{ code.code }}</span></td>
-                                <td><span v-if="code.used" class="badge badge-danger">已使用</span><span v-else class="badge badge-success">未使用</span></td>
-                                <td><span class="time-text">{{ formatTime(code.createTime) }}</span></td>
-                                <td><span v-if="code.fetchTime" class="time-text">{{ formatTime(code.fetchTime) }}</span><span v-else style="color:var(--gray-400);">—</span></td>
-                                <td style="text-align:center;">
+                                <td style="padding-left:10px;"><span class="code-value" style="word-break:break-all;">{{ code.code }}</span></td>
+                                <td style="white-space:nowrap;"><span v-if="code.used" class="badge badge-danger">已使用</span><span v-else class="badge badge-success">未使用</span></td>
+                                <td style="white-space:nowrap;"><span class="time-text">{{ formatTime(code.createTime) }}</span></td>
+                                <td style="white-space:nowrap;"><span v-if="code.fetchTime" class="time-text">{{ formatTime(code.fetchTime) }}</span><span v-else style="color:var(--gray-400);">—</span></td>
+                                <td style="text-align:center;white-space:nowrap;">
                                     <button v-if="!code.used" type="button" class="btn btn-warning btn-sm btn-mark" @click="confirmMark(code.id)">标记已使用</button>
+                                    <button v-else-if="isSuperAdmin" type="button" class="btn btn-outline btn-sm" @click="confirmUnmark(code.id)">标记未使用</button>
                                     <span v-else style="color:var(--gray-400);font-size:0.85rem;">—</span>
                                 </td>
                             </tr>
@@ -328,24 +351,106 @@
         </div>
     </div>
 
+    <!-- ========== 恢复弹窗 ========== -->
+    <div class="modal-overlay" :class="{ active: showUnmarkModal }" @click.self="showUnmarkModal = false">
+        <div class="modal-dialog"><div class="modal-header"><h3 class="modal-title">确认操作</h3></div>
+            <div class="modal-body"><p>确认将该激活码标记为未使用？</p></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" @click="showUnmarkModal = false">取消</button>
+                <button type="button" class="btn btn-warning" @click="doUnmark">确认恢复</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== 批量删除确认弹窗 ========== -->
+    <div class="modal-overlay" :class="{ active: showBatchDeleteModal }" @click.self="showBatchDeleteModal = false">
+        <div class="modal-dialog">
+            <div class="modal-header"><h3 class="modal-title">批量删除</h3></div>
+            <div class="modal-body">
+                <p>确认删除选中的 <strong>{{ selectedIds.length }}</strong> 个激活码？此操作不可撤销。</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" @click="showBatchDeleteModal = false">取消</button>
+                <button type="button" class="btn btn-danger" @click="doBatchDelete">确认删除</button>
+            </div>
+        </div>
+    </div>
+
     <!-- ========== 导入弹窗 ========== -->
     <div class="modal-overlay" :class="{ active: showImportModal }" @click.self="showImportModal = false">
         <div class="modal-dialog">
             <div class="modal-header"><h3 class="modal-title">Excel 导入激活码</h3></div>
             <div class="modal-body">
                 <p style="margin-bottom:1rem;">请上传 .xlsx 文件，第一列填写激活码：</p>
+                <!-- 拖拽上传区域 -->
+                <div class="drop-zone" :class="{ 'drag-over': dragOver }"
+                     @click="$refs.fileInput?.click()"
+                     @dragover.prevent="dragOver = true"
+                     @dragleave.prevent="dragOver = false"
+                     @drop.prevent="onDrop">
+                    <div class="drop-zone-icon">&#x1F4C1;</div>
+                    <div class="drop-zone-text">
+                        <template v-if="importFile">{{ importFile.name }}</template>
+                        <template v-else>拖拽文件到此处或<span style="color:#6366f1;text-decoration:underline;">点击选择</span></template>
+                    </div>
+                    <div class="drop-zone-hint">仅支持 .xlsx 格式</div>
+                </div>
                 <input type="file" accept=".xlsx" ref="fileInput"
-                       style="display:block;width:100%;padding:0.5rem;border:1.5px solid var(--gray-200);border-radius:8px;font-size:0.9rem;">
+                       @change="onFileChange" style="display:none;">
                 <div v-if="importResult" style="margin-top:1rem;padding:0.75rem;border-radius:8px;font-size:0.9rem;font-weight:500;"
                      :style="{ background: importOk ? 'var(--success-bg)' : 'var(--danger-bg)', color: importOk ? '#065f46' : '#991b1b' }">
                     {{ importResult }}
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-outline" @click="showImportModal = false; importResult=''">关闭</button>
-                <button type="button" class="btn btn-primary" @click="doImport" :disabled="importing">
+                <button type="button" class="btn btn-outline" @click="showImportModal = false; importResult=''; importFile=null">关闭</button>
+                <button type="button" class="btn btn-primary" @click="doImport" :disabled="importing || !importFile">
                     {{ importing ? '导入中...' : '开始导入' }}
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== 批量获取弹窗 ========== -->
+    <div class="modal-overlay" :class="{ active: showBatchClaimModal }" @click.self="showBatchClaimModal = false">
+        <div class="modal-dialog">
+            <div class="modal-header"><h3 class="modal-title">批量获取激活码</h3></div>
+            <div class="modal-body">
+                <template v-if="!batchClaimDone">
+                    <div class="form-group">
+                        <label class="form-label">获取数量</label>
+                        <input type="number" v-model.number="batchClaimCount" min="1" max="100"
+                               class="form-input" placeholder="输入获取数量（1-100）">
+                    </div>
+                    <p style="font-size:0.85rem;color:var(--gray-500);">
+                        可用 <strong>{{ listStats.available }}</strong> 个
+                    </p>
+                </template>
+                <template v-else>
+                    <div style="text-align:center;padding:0.5rem 0;">
+                        <div style="font-size:2rem;margin-bottom:0.5rem;">&#x1F389;</div>
+                        <div style="font-size:1rem;font-weight:600;margin-bottom:0.75rem;">
+                            成功获取 {{ batchClaimResult.length }} 个激活码
+                        </div>
+                        <button v-if="batchClaimResult.length > 0" type="button" class="btn btn-outline btn-sm" style="margin-bottom:0.75rem;" @click="copyBatchResult">&#x1F4CB; 一键复制</button>
+                        <div style="max-height:280px;overflow-y:auto;background:#f8f9fa;border-radius:12px;padding:0.5rem 0.75rem;">
+                            <div v-for="(c, i) in batchClaimResult" :key="i"
+                                 style="padding:0.4rem 0;font-family:monospace;font-size:0.85rem;letter-spacing:1px;
+                                        color:var(--success);font-weight:600;user-select:all;">
+                                {{ c }}
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+            <div class="modal-footer">
+                <button v-if="!batchClaimDone" type="button" class="btn btn-outline" @click="showBatchClaimModal = false">取消</button>
+                <button v-if="!batchClaimDone" type="button" class="btn btn-primary"
+                        :disabled="batchClaiming || !batchClaimCount || batchClaimCount < 1"
+                        @click="doBatchClaim">
+                    {{ batchClaiming ? '获取中...' : '确认获取' }}
+                </button>
+                <button v-else type="button" class="btn btn-primary" @click="closeBatchClaim">关闭</button>
             </div>
         </div>
     </div>
@@ -405,10 +510,17 @@
                 // 获取弹窗
                 showClaimModal: false, claimDone: false, claiming: false,
                 claimOk: false, claimCode: '', claimError: '',
+                // 批量获取
+                showBatchClaimModal: false,
+                batchClaimCount: 1,
+                batchClaimDone: false,
+                batchClaiming: false,
+                batchClaimResult: [],
                 // 查询
-                codes: [], listFilter: '', listKeyword: '', listStats: { total: 0, available: 0, used: 0 }, listAlert: '',
+                codes: [], listFilter: '', listKeyword: '', listStats: { total: 0, available: 0, used: 0 },
                 // 标记
                 showMarkModal: false, markId: null,
+                showUnmarkModal: false, unmarkId: null,
                 // 用户管理
                 pendingUsers: [], allUsers: [],
                 pendingCount: 0,
@@ -420,8 +532,12 @@
                 importing: false,
                 importResult: '',
                 importOk: false,
+                importFile: null,
+                dragOver: false,
                 // 批量标记
                 selectedIds: [],
+                // 批量删除
+                showBatchDeleteModal: false,
                 // 删除用户
                 showDeleteModal: false,
                 deleteTarget: null,
@@ -433,8 +549,7 @@
                 return this.claimOk ? '获取成功' : '获取失败';
             },
             allSelected() {
-                var available = this.codes.filter(c => !c.used);
-                return available.length > 0 && this.selectedIds.length === available.length;
+                return this.codes.length > 0 && this.selectedIds.length === this.codes.length;
             }
         },
         mounted() {
@@ -526,6 +641,51 @@
                 setTimeout(() => { this.claimDone = false; this.claiming = false; }, 300);
             },
 
+            // ----- 批量获取 -----
+            openBatchClaim() {
+                if (this.listStats.available === 0) {
+                    this.addToast({ title: '提示', desc: '暂无可用激活码' });
+                    return;
+                }
+                this.showBatchClaimModal = true;
+            },
+            async doBatchClaim() {
+                var n = this.batchClaimCount;
+                if (!n || n < 1 || n > 100) return;
+                this.batchClaiming = true;
+                try {
+                    const resp = await fetch('/admin/code/api/batch-claim', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ count: n })
+                    });
+                    const data = await resp.json();
+                    if (data.success) {
+                        this.batchClaimDone = true;
+                        this.batchClaimResult = data.codes || [];
+                        this.listStats.available = data.available;
+                        this.listStats.total = data.total;
+                        this.listStats.used = data.used;
+                        this.stats = { total: data.total, available: data.available, used: data.used };
+                    }
+                } catch { /* ignore */ }
+                this.batchClaiming = false;
+            },
+            closeBatchClaim() {
+                this.showBatchClaimModal = false;
+                this.loadCodes(this.listFilter);
+                setTimeout(() => { this.batchClaimDone = false; this.batchClaimResult = []; }, 300);
+            },
+            copyBatchResult() {
+                var ta = document.createElement('textarea');
+                ta.value = this.batchClaimResult.join('\n');
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+                this.addToast({ title: '复制成功', desc: '已复制 ' + this.batchClaimResult.length + ' 个激活码' });
+            },
+
             // ----- 查询 -----
             async loadCodes(filter) {
                 this.listFilter = filter || '';
@@ -536,11 +696,15 @@
                     const resp = await fetch('/admin/code/api/list?' + params.toString());
                     if (!resp.ok) return;
                     const data = await resp.json();
-                    this.codes = data.codes || [];
+                    this.codes = (data.codes || []).slice().sort(function(a,b){
+                        if (a.used === b.used) return a.id - b.id;
+                        return a.used ? 1 : -1;
+                    });
                     this.listStats = { total: data.total, available: data.available, used: data.used };
                 } catch { /* ignore */ }
             },
             confirmMark(id) { this.markId = id; this.showMarkModal = true; },
+            confirmUnmark(id) { this.unmarkId = id; this.showUnmarkModal = true; },
             async doMark() {
                 if (!this.markId) return;
                 try {
@@ -548,12 +712,24 @@
                     if (!resp.ok) return;
                     const data = await resp.json();
                     if (data.success) {
-                        this.listAlert = data.message;
-                        setTimeout(() => { this.listAlert = ''; }, 3000);
+                        this.addToast({ title: '标记成功', desc: data.message });
                         this.loadCodes(this.listFilter);
                     }
                 } catch { /* ignore */ }
                 this.showMarkModal = false; this.markId = null;
+            },
+            async doUnmark() {
+                if (!this.unmarkId) return;
+                try {
+                    const resp = await fetch('/admin/code/api/unuse/' + this.unmarkId, { method: 'POST' });
+                    if (!resp.ok) return;
+                    const data = await resp.json();
+                    if (data.success) {
+                        this.addToast({ title: '恢复成功', desc: data.message });
+                        this.loadCodes(this.listFilter);
+                    }
+                } catch { /* ignore */ }
+                this.showUnmarkModal = false; this.unmarkId = null;
             },
 
             // ----- 统计 -----
@@ -616,7 +792,7 @@
                 if (this.allSelected) {
                     this.selectedIds = [];
                 } else {
-                    this.selectedIds = this.codes.filter(c => !c.used).map(c => c.id);
+                    this.selectedIds = this.codes.map(c => c.id);
                 }
             },
             async batchUse() {
@@ -629,18 +805,62 @@
                     });
                     const data = await resp.json();
                     if (data.success) {
-                        this.listAlert = '已批量标记 ' + data.count + ' 个激活码';
-                        setTimeout(() => { this.listAlert = ''; }, 3000);
+                        this.addToast({ title: '批量标记', desc: '已批量标记 ' + data.count + ' 个激活码' });
                         this.selectedIds = [];
                         this.loadCodes(this.listFilter);
                     }
                 } catch { /* ignore */ }
             },
+            async batchUnuse() {
+                if (this.selectedIds.length === 0) return;
+                try {
+                    const resp = await fetch('/admin/code/api/batch-unuse', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(this.selectedIds)
+                    });
+                    const data = await resp.json();
+                    if (data.success) {
+                        this.addToast({ title: '批量恢复', desc: '已恢复 ' + data.count + ' 个激活码' });
+                        this.selectedIds = [];
+                        this.loadCodes(this.listFilter);
+                    }
+                } catch { /* ignore */ }
+            },
+            async doBatchDelete() {
+                if (this.selectedIds.length === 0) return;
+                try {
+                    const resp = await fetch('/admin/code/api/batch-delete', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(this.selectedIds)
+                    });
+                    const data = await resp.json();
+                    if (data.success) {
+                        this.addToast({ title: '批量删除', desc: '已批量删除 ' + data.count + ' 个激活码' });
+                        this.selectedIds = [];
+                        this.loadCodes(this.listFilter);
+                        this.loadStats();
+                    }
+                } catch { /* ignore */ }
+                this.showBatchDeleteModal = false;
+            },
 
             // ----- Excel 导入 -----
+            onDrop(e) {
+                this.dragOver = false;
+                var files = e.dataTransfer?.files;
+                if (files && files.length > 0) {
+                    this.importFile = files[0];
+                }
+            },
+            onFileChange(e) {
+                if (e.target.files && e.target.files.length > 0) {
+                    this.importFile = e.target.files[0];
+                }
+            },
             async doImport() {
-                var input = this.$refs.fileInput;
-                if (!input || !input.files || !input.files[0]) {
+                if (!this.importFile) {
                     this.importResult = '请选择文件';
                     this.importOk = false;
                     return;
@@ -648,14 +868,14 @@
                 this.importing = true;
                 this.importResult = '';
                 var formData = new FormData();
-                formData.append('file', input.files[0]);
+                formData.append('file', this.importFile);
                 try {
                     const resp = await fetch('/admin/code/api/import', { method: 'POST', body: formData });
                     const data = await resp.json();
                     this.importOk = data.success;
                     if (data.success) {
                         this.importResult = '成功导入 ' + data.count + ' 个激活码';
-                        input.value = '';
+                        this.importFile = null;
                         this.loadCodes(this.listFilter);
                     } else {
                         this.importResult = data.message || '导入失败';

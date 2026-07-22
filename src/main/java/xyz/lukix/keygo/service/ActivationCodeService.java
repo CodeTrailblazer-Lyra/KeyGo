@@ -63,6 +63,16 @@ public interface ActivationCodeService {
     int batchMarkAsUsed(List<Long> ids);
 
     /**
+     * 将激活码标记为未使用（恢复）
+     */
+    void markAsUnused(Long id);
+
+    /**
+     * 批量标记为未使用
+     */
+    int batchMarkAsUnused(List<Long> ids);
+
+    /**
      * 批量申领 N 个激活码（返回实际申领到的列表）
      */
     List<ActivationCode> batchClaim(int count);

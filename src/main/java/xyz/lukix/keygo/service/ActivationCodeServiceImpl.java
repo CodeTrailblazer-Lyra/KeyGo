@@ -25,7 +25,7 @@ public class ActivationCodeServiceImpl implements ActivationCodeService {
         if (codes.isEmpty()) {
             return Optional.empty();
         }
-        ActivationCode code = codes.get(0);
+        ActivationCode code = codes.getFirst();
         code.setUsed(true);
         code.setFetchTime(LocalDateTime.now());
         return Optional.of(activationCodeRepository.save(code));
@@ -114,13 +114,35 @@ public class ActivationCodeServiceImpl implements ActivationCodeService {
 
     @Override
     @Transactional
+    public void markAsUnused(Long id) {
+        activationCodeRepository.findById(id).ifPresent(code -> {
+            code.setUsed(false);
+            code.setFetchTime(null);
+            activationCodeRepository.save(code);
+        });
+    }
+
+    @Override
+    @Transactional
+    public int batchMarkAsUnused(List<Long> ids) {
+        List<ActivationCode> codes = activationCodeRepository.findAllById(ids);
+        for (ActivationCode c : codes) {
+            c.setUsed(false);
+            c.setFetchTime(null);
+        }
+        activationCodeRepository.saveAll(codes);
+        return codes.size();
+    }
+
+    @Override
+    @Transactional
     public List<ActivationCode> batchClaim(int count) {
         List<ActivationCode> result = new ArrayList<>();
         LocalDateTime now = LocalDateTime.now();
         for (int i = 0; i < count; i++) {
             List<ActivationCode> locked = activationCodeRepository.findFirstUnusedWithLock(PageRequest.of(0, 1));
             if (locked.isEmpty()) break;
-            ActivationCode code = locked.get(0);
+            ActivationCode code = locked.getFirst();
             code.setUsed(true);
             code.setFetchTime(now);
             result.add(activationCodeRepository.save(code));

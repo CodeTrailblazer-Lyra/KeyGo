@@ -156,6 +156,16 @@ public class ActivationCodeController {
     }
 
     /**
+     * 标记激活码为未使用（JSON，仅超级管理员）
+     */
+    @PostMapping("/api/unuse/{id}")
+    @ResponseBody
+    public Map<String, Object> apiMarkAsUnused(@PathVariable Long id) {
+        activationCodeService.markAsUnused(id);
+        return Map.of("success", true, "message", "激活码已标记为未使用");
+    }
+
+    /**
      * Excel 批量导入激活码
      */
     @PostMapping("/api/import")
@@ -200,6 +210,25 @@ public class ActivationCodeController {
             return Map.of("success", false, "message", "请选择要标记的激活码");
         }
         int count = activationCodeService.batchMarkAsUsed(ids);
+        Map<String, Object> result = new HashMap<>();
+        result.put("success", true);
+        result.put("count", count);
+        result.put("total", activationCodeService.countTotal());
+        result.put("available", activationCodeService.countAvailable());
+        result.put("used", activationCodeService.countUsed());
+        return result;
+    }
+
+    /**
+     * 批量标记激活码为未使用
+     */
+    @PostMapping("/api/batch-unuse")
+    @ResponseBody
+    public Map<String, Object> apiBatchUnuse(@RequestBody List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return Map.of("success", false, "message", "请选择要标记的激活码");
+        }
+        int count = activationCodeService.batchMarkAsUnused(ids);
         Map<String, Object> result = new HashMap<>();
         result.put("success", true);
         result.put("count", count);
