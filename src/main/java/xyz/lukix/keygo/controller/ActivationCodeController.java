@@ -210,6 +210,51 @@ public class ActivationCodeController {
     }
 
     /**
+     * 批量申领 N 个激活码
+     */
+    @PostMapping("/api/batch-claim")
+    @ResponseBody
+    public Map<String, Object> apiBatchClaim(@RequestBody Map<String, Integer> body) {
+        int count = body.getOrDefault("count", 1);
+        if (count < 1 || count > 100) {
+            return Map.of("success", false, "message", "数量范围 1-100");
+        }
+        List<ActivationCode> claimed = activationCodeService.batchClaim(count);
+        List<String> codes = claimed.stream().map(ActivationCode::getCode).toList();
+        Map<String, Object> result = new HashMap<>();
+        result.put("success", true);
+        result.put("count", codes.size());
+        result.put("codes", codes);
+        result.put("total", activationCodeService.countTotal());
+        result.put("available", activationCodeService.countAvailable());
+        result.put("used", activationCodeService.countUsed());
+        return result;
+    }
+
+    /**
+     * 删除激活码（仅超级管理员）
+     */
+    @DeleteMapping("/api/code/{id}")
+    @ResponseBody
+    public Map<String, Object> apiDeleteCode(@PathVariable Long id) {
+        activationCodeService.deleteCode(id);
+        return Map.of("success", true, "message", "激活码已删除");
+    }
+
+    /**
+     * 批量删除激活码
+     */
+    @PostMapping("/api/batch-delete")
+    @ResponseBody
+    public Map<String, Object> apiBatchDelete(@RequestBody List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return Map.of("success", false, "message", "请选择要删除的激活码");
+        }
+        int count = activationCodeService.batchDeleteCodes(ids);
+        return Map.of("success", true, "count", count);
+    }
+
+    /**
      * 数据统计页面
      */
     @GetMapping("/stats")

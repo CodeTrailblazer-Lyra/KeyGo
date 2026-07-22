@@ -30,9 +30,9 @@ public interface ActivationCodeRepository extends JpaRepository<ActivationCode, 
     List<ActivationCode> findByUsedOrderByCreateTimeDesc(boolean used);
 
     /**
-     * 查询所有激活码（按创建时间降序）
+     * 查询所有激活码（按ID升序，匹配插入顺序）
      */
-    List<ActivationCode> findAllByOrderByCreateTimeDesc();
+    List<ActivationCode> findAllByOrderByIdAsc();
 
     /**
      * 统计未使用的激活码数量

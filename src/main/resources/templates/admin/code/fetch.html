@@ -90,7 +90,7 @@
         <ul class="navbar-menu" :class="{ open: menuOpen }">
             <li class="navbar-item">
                 <a class="navbar-link" :class="{ active: view === 'fetch' }" href="#"
-                   @click.prevent="goView('fetch')">申领</a>
+                   @click.prevent="goView('fetch')">获取</a>
             </li>
             <!-- 仅管理员可见 -->
             <li class="navbar-item" v-if="isAdmin">
@@ -122,10 +122,10 @@
 
     <main class="container">
 
-        <!-- ====== 申领页 ====== -->
+        <!-- ====== 获取页 ====== -->
         <template v-if="view === 'fetch'">
             <div class="page-header">
-                <h1 class="page-title">激活码申领</h1>
+                <h1 class="page-title">激活码获取</h1>
                 <p class="page-subtitle">点击按钮获取一个可用的激活码</p>
             </div>
             <div class="stats-grid">
@@ -136,10 +136,10 @@
             <div class="card">
                 <div class="card-body"><div class="claim-section">
                     <div class="claim-icon">&#x1F511;</div>
-                    <h2 class="claim-title">申领激活码</h2>
+                    <h2 class="claim-title">获取激活码</h2>
                     <p class="claim-desc">当前可用激活码 {{ stats.available }} 个</p>
                     <button type="button" class="btn btn-primary claim-btn"
-                            :disabled="stats.available === 0" @click="showClaimModal = true">立即申领</button>
+                            :disabled="stats.available === 0" @click="showClaimModal = true">立即获取</button>
                     <p v-if="stats.available === 0" style="margin-top:1rem;color:var(--danger);font-size:0.85rem;">
                         当前暂无可用激活码，请联系管理员补充</p>
                 </div></div>
@@ -156,6 +156,10 @@
                 <div class="stat-card" style="cursor:pointer;" @click="showImportModal = true">
                     <div class="stat-icon total">&#x1F4C1;</div>
                     <div class="stat-info"><div class="stat-label">Excel导入</div><div class="stat-value" style="font-size:1rem;">点击上传</div></div>
+                </div>
+                <div class="stat-card" style="cursor:pointer;" @click="openBatchClaim">
+                    <div class="stat-icon total">&#x1F4E6;</div>
+                    <div class="stat-info"><div class="stat-label">批量获取</div><div class="stat-value" style="font-size:1rem;">一键获取</div></div>
                 </div>
                 <div class="stat-card" style="cursor:pointer;" :class="{ 'opacity-5': selectedIds.length === 0 }"
                      @click="batchUse">
@@ -185,7 +189,7 @@
                 </div>
                 <div class="card-body" style="padding:0;">
                     <div class="table-wrapper"><table class="table">
-                        <thead><tr><th style="width:40px;"><input type="checkbox" :checked="allSelected" @change="toggleAll"></th><th>#</th><th>激活码</th><th>状态</th><th>创建时间</th><th>申领时间</th><th style="text-align:center;">操作</th></tr></thead>
+                        <thead><tr><th style="width:40px;"><input type="checkbox" :checked="allSelected" @change="toggleAll"></th><th>#</th><th>激活码</th><th>状态</th><th>创建时间</th><th>获取时间</th><th style="text-align:center;">操作</th></tr></thead>
                         <tbody>
                             <tr v-if="codes.length === 0"><td colspan="7" class="table-empty"><div class="empty-state"><div class="empty-state-icon">&#x1F4ED;</div><div class="empty-state-text">暂无数据</div></div></td></tr>
                             <tr v-for="code in codes" :key="code.id" class="row-hover">
@@ -284,13 +288,13 @@
         </template>
     </main>
 
-    <!-- ========== 申领弹窗（加宽） ========== -->
+    <!-- ========== 获取弹窗（加宽） ========== -->
     <div class="modal-overlay" :class="{ active: showClaimModal }" @click.self="closeClaimModal">
         <div class="modal-dialog wide">
             <div class="modal-header"><h3 class="modal-title">{{ claimTitle }}</h3></div>
             <div class="modal-body">
                 <template v-if="!claimDone">
-                    <p>您即将申领一个激活码，确认继续吗？</p>
+                    <p>您即将获取一个激活码，确认继续吗？</p>
                     <p style="font-size:0.85rem;color:var(--gray-500);margin-top:0.5rem;">
                         可用 <strong>{{ stats.available }}</strong> 个</p>
                 </template>
@@ -299,7 +303,7 @@
                         <div style="font-size:2.5rem;margin-bottom:0.75rem;">
                             <span v-if="claimOk">&#x1F389;</span><span v-else>&#x1F605;</span></div>
                         <div style="font-size:1rem;font-weight:600;margin-bottom:0.75rem;">
-                            <span v-if="claimOk">恭喜，您已成功申领：</span><span v-else>申领失败</span></div>
+                            <span v-if="claimOk">恭喜，您已成功获取：</span><span v-else>获取失败</span></div>
                         <div v-if="claimOk" class="claim-code-display">{{ claimCode }}</div>
                         <div v-else style="color:var(--danger);font-weight:500;">{{ claimError }}</div>
                     </div>
@@ -307,7 +311,7 @@
             </div>
             <div class="modal-footer">
                 <button v-if="!claimDone" type="button" class="btn btn-outline" @click="closeClaimModal">取消</button>
-                <button v-if="!claimDone" type="button" class="btn btn-primary" :disabled="claiming" @click="doClaim">{{ claiming ? '申领中...' : '确认申领' }}</button>
+                <button v-if="!claimDone" type="button" class="btn btn-primary" :disabled="claiming" @click="doClaim">{{ claiming ? '获取中...' : '确认获取' }}</button>
                 <button v-else type="button" class="btn btn-primary" @click="closeClaimModal">关闭</button>
             </div>
         </div>
@@ -398,7 +402,7 @@
                 isSuperAdmin: false,
                 // stats
                 stats: { total: INIT.total, available: INIT.available, used: INIT.used },
-                // 申领弹窗
+                // 获取弹窗
                 showClaimModal: false, claimDone: false, claiming: false,
                 claimOk: false, claimCode: '', claimError: '',
                 // 查询
@@ -425,8 +429,8 @@
         },
         computed: {
             claimTitle() {
-                if (!this.claimDone) return '确认申领';
-                return this.claimOk ? '申领成功' : '申领失败';
+                if (!this.claimDone) return '确认获取';
+                return this.claimOk ? '获取成功' : '获取失败';
             },
             allSelected() {
                 var available = this.codes.filter(c => !c.used);
@@ -501,7 +505,7 @@
                 if (v === 'admin') { this.loadUsers(); this.notifiedPending = false; }
             },
 
-            // ----- 申领 -----
+            // ----- 获取 -----
             async doClaim() {
                 this.claiming = true;
                 try {

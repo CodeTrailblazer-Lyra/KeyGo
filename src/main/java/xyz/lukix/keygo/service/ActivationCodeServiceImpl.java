@@ -8,6 +8,7 @@ import xyz.lukix.keygo.entity.ActivationCode;
 import xyz.lukix.keygo.repository.ActivationCodeRepository;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -20,7 +21,6 @@ public class ActivationCodeServiceImpl implements ActivationCodeService {
     @Override
     @Transactional
     public Optional<ActivationCode> claimCode() {
-        // 悲观锁：SELECT ... FOR UPDATE，防止并发抢到同一个激活码
         List<ActivationCode> codes = activationCodeRepository.findFirstUnusedWithLock(PageRequest.of(0, 1));
         if (codes.isEmpty()) {
             return Optional.empty();
@@ -34,7 +34,7 @@ public class ActivationCodeServiceImpl implements ActivationCodeService {
     @Override
     @Transactional(readOnly = true)
     public List<ActivationCode> listAll() {
-        return activationCodeRepository.findAllByOrderByCreateTimeDesc();
+        return activationCodeRepository.findAllByOrderByIdAsc();
     }
 
     @Override
@@ -110,5 +110,34 @@ public class ActivationCodeServiceImpl implements ActivationCodeService {
         }
         activationCodeRepository.saveAll(codes);
         return codes.size();
+    }
+
+    @Override
+    @Transactional
+    public List<ActivationCode> batchClaim(int count) {
+        List<ActivationCode> result = new ArrayList<>();
+        LocalDateTime now = LocalDateTime.now();
+        for (int i = 0; i < count; i++) {
+            List<ActivationCode> locked = activationCodeRepository.findFirstUnusedWithLock(PageRequest.of(0, 1));
+            if (locked.isEmpty()) break;
+            ActivationCode code = locked.get(0);
+            code.setUsed(true);
+            code.setFetchTime(now);
+            result.add(activationCodeRepository.save(code));
+        }
+        return result;
+    }
+
+    @Override
+    @Transactional
+    public void deleteCode(Long id) {
+        activationCodeRepository.deleteById(id);
+    }
+
+    @Override
+    @Transactional
+    public int batchDeleteCodes(List<Long> ids) {
+        activationCodeRepository.deleteAllById(ids);
+        return ids.size();
     }
 }
