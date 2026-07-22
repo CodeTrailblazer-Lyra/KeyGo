@@ -29,7 +29,18 @@ jobs:
           chmod +x gradlew
           ./gradlew clean bootJar -x test
 
+      - name: Resolve built JAR
+        id: jar
+        run: |
+          jar_file="$(ls -1 build/libs/*.jar | head -n 1)"
+          if [ -z "$jar_file" ]; then
+            echo "No JAR produced in build/libs"
+            exit 1
+          fi
+          echo "jar_file=$jar_file" >> "$GITHUB_OUTPUT"
+
       - name: Upload release assets
         uses: softprops/action-gh-release@v2
         with:
-          files: build/libs/*.jar
+          files: ${{ steps.jar.outputs.jar_file }}
+          fail_on_unmatched_files: true
