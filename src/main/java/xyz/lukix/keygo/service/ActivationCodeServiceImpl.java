@@ -114,6 +114,28 @@ public class ActivationCodeServiceImpl implements ActivationCodeService {
 
     @Override
     @Transactional
+    public void markAsUnused(Long id) {
+        activationCodeRepository.findById(id).ifPresent(code -> {
+            code.setUsed(false);
+            code.setFetchTime(null);
+            activationCodeRepository.save(code);
+        });
+    }
+
+    @Override
+    @Transactional
+    public int batchMarkAsUnused(List<Long> ids) {
+        List<ActivationCode> codes = activationCodeRepository.findAllById(ids);
+        for (ActivationCode c : codes) {
+            c.setUsed(false);
+            c.setFetchTime(null);
+        }
+        activationCodeRepository.saveAll(codes);
+        return codes.size();
+    }
+
+    @Override
+    @Transactional
     public List<ActivationCode> batchClaim(int count) {
         List<ActivationCode> result = new ArrayList<>();
         LocalDateTime now = LocalDateTime.now();

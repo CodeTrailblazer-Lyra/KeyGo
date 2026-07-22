@@ -23,7 +23,6 @@ repositories {
 dependencies {
     // Spring Boot Starters
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
-    implementation("org.springframework.boot:spring-boot-starter-data-redis")
     implementation("org.springframework.boot:spring-boot-starter-security")
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.springframework.boot:spring-boot-starter-webmvc")
@@ -65,4 +64,5 @@ tasks.jar {
 // 编译统一UTF-8编码，避免Windows中文乱码
 tasks.withType<JavaCompile> {
     options.encoding = "UTF-8"
+    options.compilerArgs.addAll(listOf("-Xlint:all,-processing"))
 }
