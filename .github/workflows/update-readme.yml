@@ -1,0 +1,39 @@
+name: Update README
+
+on:
+  push:
+    paths-ignore:
+      - "README.md"
+
+permissions:
+  contents: write
+
+jobs:
+  update-readme:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Update README timestamp
+        run: |
+          timestamp="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+          if grep -q '^最后更新时间：' README.md; then
+            sed -i "s/^最后更新时间：.*/最后更新时间：${timestamp}/" README.md
+          else
+            echo "" >> README.md
+            echo "最后更新时间：${timestamp}" >> README.md
+          fi
+
+      - name: Commit changes
+        run: |
+          if git diff --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          git commit -m "docs: update README timestamp [skip ci]"
+          git push
