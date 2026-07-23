@@ -54,6 +54,50 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional
+    public void changePassword(Long targetUserId, String oldPassword, String newPassword, String operatorUsername) {
+        SysUser operator = sysUserRepository.findByUsername(operatorUsername)
+                .orElseThrow(() -> new IllegalArgumentException("操作者不存在"));
+
+        // 确定目标用户
+        SysUser target;
+        if (targetUserId == null || targetUserId.equals(operator.getId())) {
+            target = operator;
+        } else {
+            target = sysUserRepository.findById(targetUserId)
+                    .orElseThrow(() -> new IllegalArgumentException("目标用户不存在"));
+        }
+
+        boolean isSelf = target.getId().equals(operator.getId());
+
+        if (isSelf) {
+            // 修改自己的密码：必须验证旧密码 + 二次确认（由前端保证）
+            if (oldPassword == null || oldPassword.isBlank()) {
+                throw new IllegalArgumentException("请输入当前密码");
+            }
+            if (!passwordEncoder.matches(oldPassword, target.getPassword())) {
+                throw new IllegalArgumentException("当前密码错误");
+            }
+        } else {
+            // 修改他人密码：必须是管理员及以上
+            if (operator.getRole() != Role.ROLE_SUPER_ADMIN && operator.getRole() != Role.ROLE_ADMIN) {
+                throw new SecurityException("无权修改他人密码");
+            }
+            // 管理员不能修改超级管理员的密码
+            if (operator.getRole() == Role.ROLE_ADMIN && target.getRole() == Role.ROLE_SUPER_ADMIN) {
+                throw new SecurityException("无权修改超级管理员的密码");
+            }
+        }
+
+        if (newPassword == null || newPassword.length() < 4) {
+            throw new IllegalArgumentException("新密码至少4个字符");
+        }
+
+        target.setPassword(passwordEncoder.encode(newPassword));
+        sysUserRepository.save(target);
+    }
+
+    @Override
+    @Transactional
     public void deleteUser(Long userId, String operatorUsername) {
         SysUser operator = sysUserRepository.findByUsername(operatorUsername)
                 .orElseThrow(() -> new IllegalArgumentException("操作者不存在"));

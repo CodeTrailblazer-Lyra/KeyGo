@@ -139,6 +139,7 @@
                 <form th:action="@{/logout}" method="post" style="display:inline;">
                     <button type="submit" class="logout-btn">退出</button>
                 </form>
+                <button type="button" class="logout-btn" style="margin-left:4px;" @click="openPasswordModal(null)">修改密码</button>
             </li>
         </ul>
     </nav>
@@ -299,6 +300,7 @@
                                         <option value="ROLE_SUPER_ADMIN" v-if="isSuperAdmin">超级管理员</option>
                                     </select>
                                     <span v-else style="color:var(--gray-400);font-size:0.8rem;">—</span>
+                                    <button v-if="isAdmin" type="button" class="btn btn-outline btn-sm" style="margin-left:4px;" @click="openPasswordModal(u)">改密</button>
                                     <button v-if="isSuperAdmin && u.username !== username" type="button"
                                             class="btn btn-danger btn-sm" style="margin-left:6px;"
                                             @click="confirmDeleteUser(u)">删除</button>
@@ -455,6 +457,38 @@
         </div>
     </div>
 
+    <!-- ========== 密码修改弹窗 ========== -->
+    <div class="modal-overlay" :class="{ active: showPasswordModal }" @click.self="showPasswordModal = false">
+        <div class="modal-dialog">
+            <div class="modal-header"><h3 class="modal-title">{{ pwdIsSelf ? '修改密码' : '重置密码 - ' + pwdTarget?.username }}</h3></div>
+            <div class="modal-body">
+                <div v-if="pwdResult" class="reg-msg" :class="pwdResultOk ? 'ok' : 'err'">{{ pwdResult }}</div>
+
+                <div v-if="pwdIsSelf" class="form-group">
+                    <label class="form-label">当前密码</label>
+                    <input type="password" v-model="pwdOld" class="form-input" placeholder="请输入当前密码" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">新密码</label>
+                    <input type="password" v-model="pwdNew" class="form-input" placeholder="请输入新密码" required minlength="4">
+                </div>
+                <div v-if="pwdIsSelf" class="form-group">
+                    <label class="form-label">确认新密码</label>
+                    <input type="password" v-model="pwdNew2" class="form-input" placeholder="再次输入新密码" required minlength="4"
+                           @input="pwdMatch = pwdNew === pwdNew2">
+                    <small v-if="pwdNew2 && !pwdMatch"
+                           style="color:var(--danger);font-size:0.75rem;margin-top:0.25rem;display:block;">两次密码不一致</small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" @click="closePasswordModal">取消</button>
+                <button type="button" class="btn btn-primary" :disabled="!pwdNew || pwdNew.length < 4 || (pwdIsSelf && (!pwdOld || !pwdMatch))" @click="doChangePassword">
+                    {{ pwdLoading ? '修改中...' : '确认修改' }}
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- ========== 删除用户确认弹窗 ========== -->
     <div class="modal-overlay" :class="{ active: showDeleteModal }" @click.self="showDeleteModal = false">
         <div class="modal-dialog">
@@ -482,7 +516,7 @@
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js" crossorigin="anonymous"></script>
 <script th:inline="javascript">
     /*<![CDATA[*/
     const INIT = {
@@ -541,6 +575,17 @@
                 // 删除用户
                 showDeleteModal: false,
                 deleteTarget: null,
+                // 密码修改
+                showPasswordModal: false,
+                pwdTarget: null,
+                pwdIsSelf: true,
+                pwdOld: '',
+                pwdNew: '',
+                pwdNew2: '',
+                pwdMatch: true,
+                pwdResult: '',
+                pwdResultOk: false,
+                pwdLoading: false,
             };
         },
         computed: {
@@ -906,6 +951,51 @@
                 this.deleteTarget = null;
             },
 
+            // ----- 密码修改 -----
+            openPasswordModal(u) {
+                this.pwdTarget = u;
+                this.pwdIsSelf = !u || u.username === this.username;
+                this.pwdOld = '';
+                this.pwdNew = '';
+                this.pwdNew2 = '';
+                this.pwdMatch = true;
+                this.pwdResult = '';
+                this.showPasswordModal = true;
+            },
+            closePasswordModal() {
+                this.showPasswordModal = false;
+                this.pwdTarget = null;
+                this.pwdResult = '';
+            },
+            async doChangePassword() {
+                var isSelf = this.pwdIsSelf;
+                if (isSelf && (!this.pwdOld || this.pwdNew !== this.pwdNew2)) return;
+                this.pwdLoading = true;
+                this.pwdResult = '';
+                try {
+                    var body = {
+                        userId: isSelf ? null : this.pwdTarget.id,
+                        oldPassword: isSelf ? this.pwdOld : null,
+                        newPassword: this.pwdNew
+                    };
+                    const resp = await fetch('/admin/api/password', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(body)
+                    });
+                    const data = await resp.json();
+                    this.pwdResultOk = data.success;
+                    this.pwdResult = data.message || (data.success ? '密码修改成功' : '修改失败');
+                    if (data.success) {
+                        this.pwdOld = ''; this.pwdNew = ''; this.pwdNew2 = '';
+                    }
+                } catch (err) {
+                    this.pwdResultOk = false;
+                    this.pwdResult = '网络错误，请重试';
+                } finally {
+                    this.pwdLoading = false;
+                }
+            },
             // ----- 通用 -----
             formatTime(ts) {
                 if (!ts) return '—';

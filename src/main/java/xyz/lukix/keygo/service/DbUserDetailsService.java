@@ -1,5 +1,6 @@
 package xyz.lukix.keygo.service;
 
+import jakarta.annotation.Nullable;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -20,7 +21,7 @@ public class DbUserDetailsService implements UserDetailsService {
     private final SysUserRepository sysUserRepository;
 
     @Override
-    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+    public UserDetails loadUserByUsername(@Nullable String username) throws UsernameNotFoundException {
         SysUser user = sysUserRepository.findByUsername(username)
                 .orElseThrow(() -> new UsernameNotFoundException("账号不存在：" + username));
 

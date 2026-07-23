@@ -34,7 +34,7 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) {
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health").permitAll()
@@ -58,6 +58,10 @@ public class SecurityConfig {
                         .permitAll()
                 )
                 .logout(LogoutConfigurer::permitAll)
+                .rememberMe(remember -> remember
+                        .tokenValiditySeconds(7 * 24 * 60 * 60)
+                        .key("KeyGoRememberMeKey")
+                )
                 .csrf(AbstractHttpConfigurer::disable);
 
         return http.build();

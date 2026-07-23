@@ -77,6 +77,10 @@
                     <label class="form-label" for="loginPwd">密码</label>
                     <input id="loginPwd" name="password" type="password" class="form-input" placeholder="请输入密码" required>
                 </div>
+                <label style="display:flex;align-items:center;gap:0.5rem;margin-bottom:1rem;font-size:0.85rem;color:var(--gray-500);cursor:pointer;">
+                    <input type="checkbox" name="remember-me" checked style="width:16px;height:16px;accent-color:#6366f1;cursor:pointer;">
+                    记住我（7天内免登录）
+                </label>
                 <button type="submit" class="btn btn-primary login-btn">登 录</button>
             </form>
         </div>
@@ -116,7 +120,7 @@
     <div class="login-footer">KeyGo Activation Code System</div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js" crossorigin="anonymous"></script>
 <script>
     const { createApp } = Vue;
     createApp({

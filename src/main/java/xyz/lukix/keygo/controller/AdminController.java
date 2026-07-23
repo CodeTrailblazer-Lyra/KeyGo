@@ -108,4 +108,19 @@ public class AdminController {
             return Map.of("success", false, "message", e.getMessage());
         }
     }
+
+    /** 修改密码 */
+    @PostMapping("/password")
+    public Map<String, Object> changePassword(@RequestBody Map<String, Object> body,
+                                               Authentication auth) {
+        try {
+            Long targetUserId = body.get("userId") != null ? ((Number) body.get("userId")).longValue() : null;
+            String oldPassword = (String) body.get("oldPassword");
+            String newPassword = (String) body.get("newPassword");
+            userService.changePassword(targetUserId, oldPassword, newPassword, auth.getName());
+            return Map.of("success", true, "message", "密码修改成功");
+        } catch (SecurityException | IllegalArgumentException e) {
+            return Map.of("success", false, "message", e.getMessage());
+        }
+    }
 }

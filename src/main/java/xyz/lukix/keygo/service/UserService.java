@@ -37,4 +37,13 @@ public interface UserService {
 
     /** 判断是否为 ADMIN 及以上 */
     boolean isAdmin(String username);
+
+    /**
+     * 修改密码
+     * @param targetUserId 目标用户ID（null 表示修改自己）
+     * @param oldPassword  当前密码（自己修改时必填，管理员改别人时传 null）
+     * @param newPassword  新密码
+     * @param operatorUsername 操作者用户名
+     */
+    void changePassword(Long targetUserId, String oldPassword, String newPassword, String operatorUsername);
 }

@@ -2,6 +2,7 @@ package xyz.lukix.keygo.config;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.annotation.Nullable;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;
@@ -23,9 +24,9 @@ public class CustomAuthFailureHandler extends SimpleUrlAuthenticationFailureHand
     private final SysUserRepository sysUserRepository;
 
     @Override
-    public void onAuthenticationFailure(HttpServletRequest request, HttpServletResponse response,
-                                        AuthenticationException exception) throws IOException {
-        String username = request.getParameter("username");
+    public void onAuthenticationFailure(@Nullable HttpServletRequest request, @Nullable HttpServletResponse response,
+                                        @Nullable AuthenticationException exception) throws IOException {
+        String username = request != null ? request.getParameter("username") : null;
         String errorMsg;
 
         if (exception instanceof DisabledException) {
@@ -33,10 +34,12 @@ public class CustomAuthFailureHandler extends SimpleUrlAuthenticationFailureHand
             Optional<SysUser> userOpt = sysUserRepository.findByUsername(username);
             if (userOpt.isPresent()) {
                 SysUser user = userOpt.get();
-                if (!user.getApproved() && user.getEnabled()) {
-                    errorMsg = "账号还在审核中，请等待管理员审核通过";
-                } else if (!user.getApproved() && !user.getEnabled()) {
-                    errorMsg = "审核未通过，请联系管理员";
+                if (!user.getApproved()) {
+                    if (Boolean.TRUE.equals(user.getEnabled())) {
+                        errorMsg = "账号还在审核中，请等待管理员审核通过";
+                    } else {
+                        errorMsg = "审核未通过，请联系管理员";
+                    }
                 } else {
                     errorMsg = "账号已被禁用";
                 }

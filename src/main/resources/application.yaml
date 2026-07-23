@@ -17,3 +17,7 @@ spring:
       max-request-size: 10MB
 server:
   port: 18080
+  servlet:
+    session:
+      cookie:
+        same-site: lax

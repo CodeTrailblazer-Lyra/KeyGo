@@ -4,12 +4,6 @@ spring:
     username: KeyGo
     password: "My45P2TzzKzxpEse"
     driver-class-name: org.postgresql.Driver
-  data:
-    redis:
-      host: 172.18.0.3
-      port: 6379
-      username: default
-      password: "redis_z7pzC6"
   jpa:
     hibernate:
       ddl-auto: validate

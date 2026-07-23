@@ -89,7 +89,7 @@ public class ActivationCodeController {
         model.addAttribute("total", activationCodeService.countTotal());
         model.addAttribute("available", activationCodeService.countAvailable());
         model.addAttribute("used", activationCodeService.countUsed());
-        return "admin/code/list";
+        return "admin/code/fetch";
     }
 
     /**
@@ -295,6 +295,6 @@ public class ActivationCodeController {
         model.addAttribute("total", total);
         model.addAttribute("available", available);
         model.addAttribute("used", used);
-        return "admin/code/stats";
+        return "admin/code/fetch";
     }
 }
