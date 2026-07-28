@@ -1,6 +1,6 @@
 spring:
   datasource:
-    url: jdbc:postgresql://172.18.0.2:5432/KeyGo
+    url: jdbc:postgresql://172.18.0.100:5432/KeyGo
     username: KeyGo
     password: "My45P2TzzKzxpEse"
     driver-class-name: org.postgresql.Driver
