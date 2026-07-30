@@ -1,4 +1,7 @@
 spring:
+  config:
+    activate:
+      on-profile: dev
   datasource:
     url: jdbc:postgresql://localhost:5432/keygo
     username: postgres
@@ -8,9 +11,16 @@ spring:
     hibernate:
       ddl-auto: update
     show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+  thymeleaf:
+    cache: false
 
 logging:
   level:
+    root: INFO
     org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
     org.springframework.web: DEBUG
     com.yourpackage: DEBUG

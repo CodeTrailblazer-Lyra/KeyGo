@@ -1,12 +1,18 @@
 spring:
+  config:
+    activate:
+      on-profile: prod
   datasource:
     url: jdbc:postgresql://172.18.0.100:5432/KeyGo
     username: KeyGo
-    password: "My45P2TzzKzxpEse"
+    password: ${DB_PASSWORD:My45P2TzzKzxpEse}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 20
       minimum-idle: 10
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
   jpa:
     hibernate:
       ddl-auto: validate
@@ -24,3 +30,4 @@ logging:
     rollingpolicy:
       max-file-size: 100MB
       max-history: 30
+      total-size-cap: 10GB
