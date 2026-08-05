@@ -2,6 +2,7 @@ package xyz.lukix.keygo.service;
 
 import xyz.lukix.keygo.entity.ActivationCode;
 
+import org.springframework.data.domain.Page;
 import java.util.List;
 import java.util.Optional;
 
@@ -21,6 +22,11 @@ public interface ActivationCodeService {
      * 根据状态查询激活码
      */
     List<ActivationCode> listByUsed(boolean used);
+
+    /**
+     * 分页查询激活码（按状态筛选/关键字搜索，未使用在前，已使用在后，各自按ID升序）
+     */
+    Page<ActivationCode> pageQuery(String status, String keyword, int page, int size);
 
     /**
      * 获取可用激活码总数

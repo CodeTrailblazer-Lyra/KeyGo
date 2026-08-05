@@ -3,6 +3,7 @@ package xyz.lukix.keygo.entity;
 import jakarta.persistence.*;
 import lombok.Data;
 import org.hibernate.annotations.CreationTimestamp;
+import org.springframework.beans.factory.annotation.Value;
 
 import java.time.LocalDateTime;
 

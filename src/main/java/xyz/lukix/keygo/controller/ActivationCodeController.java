@@ -1,6 +1,7 @@
 package xyz.lukix.keygo.controller;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
@@ -105,40 +106,24 @@ public class ActivationCodeController {
     // ========== Vue SPA JSON API ==========
 
     /**
-     * 获取激活码列表（JSON）
+     * 获取激活码列表（JSON，分页）
      */
     @GetMapping("/api/list")
     @ResponseBody
     public Map<String, Object> apiList(@RequestParam(required = false) String status,
-                                       @RequestParam(required = false) String keyword) {
-        List<ActivationCode> codes;
-        if (keyword != null && !keyword.isBlank()) {
-            codes = activationCodeService.searchByCode(keyword);
-        } else if ("used".equals(status)) {
-            codes = activationCodeService.listByUsed(true);
-        } else if ("unused".equals(status)) {
-            codes = activationCodeService.listByUsed(false);
-        } else {
-            codes = activationCodeService.listAll();
-        }
+                                       @RequestParam(required = false) String keyword,
+                                       @RequestParam(defaultValue = "1") int page,
+                                       @RequestParam(defaultValue = "20") int size) {
+        Page<ActivationCode> pageResult = activationCodeService.pageQuery(status, keyword, page, size);
         Map<String, Object> result = new HashMap<>();
-        result.put("codes", codes);
+        result.put("codes", pageResult.getContent());
         result.put("total", activationCodeService.countTotal());
         result.put("available", activationCodeService.countAvailable());
         result.put("used", activationCodeService.countUsed());
-        return result;
-    }
-
-    /**
-     * 获取统计数据（JSON）
-     */
-    @GetMapping("/api/stats")
-    @ResponseBody
-    public Map<String, Long> apiStats() {
-        Map<String, Long> result = new HashMap<>();
-        result.put("total", activationCodeService.countTotal());
-        result.put("available", activationCodeService.countAvailable());
-        result.put("used", activationCodeService.countUsed());
+        result.put("page", pageResult.getNumber() + 1);
+        result.put("size", pageResult.getSize());
+        result.put("totalPages", pageResult.getTotalPages());
+        result.put("totalElements", pageResult.getTotalElements());
         return result;
     }
 
@@ -281,20 +266,5 @@ public class ActivationCodeController {
         }
         int count = activationCodeService.batchDeleteCodes(ids);
         return Map.of("success", true, "count", count);
-    }
-
-    /**
-     * 数据统计页面
-     */
-    @GetMapping("/stats")
-    public String statsPage(Model model) {
-        long total = activationCodeService.countTotal();
-        long available = activationCodeService.countAvailable();
-        long used = activationCodeService.countUsed();
-
-        model.addAttribute("total", total);
-        model.addAttribute("available", available);
-        model.addAttribute("used", used);
-        return "admin/code/fetch";
     }
 }

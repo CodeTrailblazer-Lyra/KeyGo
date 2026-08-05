@@ -63,8 +63,9 @@
         <button class="auth-tab" :class="{ active: tab === 'register' }" @click="tab='register'">注册</button>
     </div>
 
-    <!-- ═══ 登录 ═══ -->
-    <Transition name="auth-form">
+    <!-- ═══ 登录 / 注册（同一 Transition，out-in 模式避免双表单叠加）═══ -->
+    <Transition name="auth-form" mode="out-in">
+        <!-- 登录 -->
         <div v-if="tab === 'login'" key="login">
             <div v-if="loginError" class="login-error">{{ loginError }}</div>
             <div th:if="${param.logout}" class="alert alert-success" style="margin-bottom:1rem;">您已成功退出登录</div>
@@ -79,16 +80,13 @@
                 </div>
                 <label style="display:flex;align-items:center;gap:0.5rem;margin-bottom:1rem;font-size:0.85rem;color:var(--gray-500);cursor:pointer;">
                     <input type="checkbox" name="remember-me" checked style="width:16px;height:16px;accent-color:#6366f1;cursor:pointer;">
-                    记住我（7天内免登录）
+                    记住我（14天内免登录）
                 </label>
                 <button type="submit" class="btn btn-primary login-btn">登 录</button>
             </form>
         </div>
-    </Transition>
-
-    <!-- ═══ 注册 ═══ -->
-    <Transition name="auth-form">
-        <div v-if="tab === 'register'" key="register">
+        <!-- 注册 -->
+        <div v-else key="register">
             <div v-if="regMsg" class="reg-msg" :class="regOk ? 'ok' : 'err'">{{ regMsg }}</div>
             <form @submit.prevent="doRegister">
                 <div class="form-group">

@@ -1,6 +1,7 @@
 package xyz.lukix.keygo.repository;
 
 import org.springframework.data.jpa.repository.*;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import xyz.lukix.keygo.entity.ActivationCode;
 
@@ -33,6 +34,26 @@ public interface ActivationCodeRepository extends JpaRepository<ActivationCode, 
      * 查询所有激活码（按ID升序，匹配插入顺序）
      */
     List<ActivationCode> findAllByOrderByIdAsc();
+
+    /**
+     * 分页查询所有激活码（未使用在前按ID升序，已使用在后按最后使用时间倒序）
+     */
+    Page<ActivationCode> findAllByOrderByUsedAscFetchTimeDescIdAsc(Pageable pageable);
+
+    /**
+     * 分页按状态查询激活码（未使用按ID升序）
+     */
+    Page<ActivationCode> findByUsedOrderByIdAsc(boolean used, Pageable pageable);
+
+    /**
+     * 分页按状态查询激活码（已使用按最后使用时间倒序）
+     */
+    Page<ActivationCode> findByUsedOrderByFetchTimeDesc(boolean used, Pageable pageable);
+
+    /**
+     * 分页按激活码代码模糊搜索（按ID升序）
+     */
+    Page<ActivationCode> findByCodeContainingIgnoreCaseOrderByIdAsc(String keyword, Pageable pageable);
 
     /**
      * 统计未使用的激活码数量

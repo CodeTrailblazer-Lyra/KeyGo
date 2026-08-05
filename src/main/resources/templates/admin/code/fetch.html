@@ -98,6 +98,12 @@
         .drop-zone-icon { font-size:2rem; margin-bottom:0.5rem; }
         .drop-zone-text { font-size:0.9rem; color:var(--gray-600); margin-bottom:0.25rem; }
         .drop-zone-hint { font-size:0.75rem; color:var(--gray-400); }
+        .pagination { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:0.5rem;
+                      padding:0.75rem 1rem; border-top:1px solid var(--gray-100); }
+        .pagination-info { font-size:0.85rem; color:var(--gray-500); }
+        .pagination-btns { display:flex; align-items:center; gap:0.5rem; }
+        .pagination-current { font-size:0.85rem; color:var(--gray-600); }
+        .pagination .btn:disabled { opacity:0.45; cursor:not-allowed; }
     </style>
 </head>
 <body>
@@ -119,10 +125,6 @@
             <li class="navbar-item" v-if="isAdmin">
                 <a class="navbar-link" :class="{ active: view === 'list' }" href="#"
                    @click.prevent="goView('list')">查询</a>
-            </li>
-            <li class="navbar-item" v-if="isAdmin">
-                <a class="navbar-link" :class="{ active: view === 'stats' }" href="#"
-                   @click.prevent="goView('stats')">统计</a>
             </li>
             <li class="navbar-item" v-if="isAdmin">
                 <a class="navbar-link" :class="{ active: view === 'admin' }" href="#"
@@ -200,13 +202,13 @@
                             <button v-if="isSuperAdmin" type="button" class="btn btn-danger btn-sm" style="margin-right:0.75rem;animation:slideBatch 0.35s cubic-bezier(0.34,1.56,0.64,1);" @click="showBatchDeleteModal = true">批量删除</button>
                         </template>
                         <div class="filter-tabs">
-                            <a class="filter-tab" :class="{ active: listFilter === '' }" href="#" @click.prevent="loadCodes('')">全部</a>
-                            <a class="filter-tab" :class="{ active: listFilter === 'unused' }" href="#" @click.prevent="loadCodes('unused')">未使用</a>
-                            <a class="filter-tab" :class="{ active: listFilter === 'used' }" href="#" @click.prevent="loadCodes('used')">已使用</a>
+                            <a class="filter-tab" :class="{ active: listFilter === '' }" href="#" @click.prevent="loadCodes('', 1)">全部</a>
+                            <a class="filter-tab" :class="{ active: listFilter === 'unused' }" href="#" @click.prevent="loadCodes('unused', 1)">未使用</a>
+                            <a class="filter-tab" :class="{ active: listFilter === 'used' }" href="#" @click.prevent="loadCodes('used', 1)">已使用</a>
                         </div>
                         <div style="display:flex;gap:0.5rem;">
-                            <input type="text" class="search-input" v-model="listKeyword" placeholder="搜索..." @keyup.enter="loadCodes(listFilter)" />
-                            <button type="button" class="btn btn-outline btn-sm" @click="loadCodes(listFilter)">搜索</button>
+                            <input type="text" class="search-input" v-model="listKeyword" placeholder="搜索..." @keyup.enter="loadCodes(listFilter, 1)" />
+                            <button type="button" class="btn btn-outline btn-sm" @click="loadCodes(listFilter, 1)">搜索</button>
                         </div>
                     </div>
                 </div>
@@ -231,27 +233,13 @@
                         </tbody>
                     </table></div>
                 </div>
-            </div>
-        </template>
-
-        <!-- ====== 统计页（管理员） ====== -->
-        <template v-if="view === 'stats'">
-            <div class="page-header"><h1 class="page-title">数据统计</h1><p class="page-subtitle">激活码使用概览</p></div>
-            <div class="stats-overview">
-                <div class="stats-card-lg"><div class="stats-icon-lg total">&#x1F4E6;</div><div class="stats-label">总数</div><div class="stats-number total-num">{{ stats.total }}</div><div class="progress-bar-container"><div class="progress-bar-bg"><div class="progress-bar-fill available-fill" :style="'width:100%'"></div></div></div></div>
-                <div class="stats-card-lg"><div class="stats-icon-lg available">&#x2705;</div><div class="stats-label">可用</div><div class="stats-number available-num">{{ stats.available }}</div><div class="progress-bar-container"><div class="progress-bar-bg"><div class="progress-bar-fill available-fill" :style="'width:' + (stats.total > 0 ? (stats.available/stats.total*100) : 0) + '%'"></div></div></div></div>
-                <div class="stats-card-lg"><div class="stats-icon-lg used">&#x1F4CC;</div><div class="stats-label">已使用</div><div class="stats-number used-num">{{ stats.used }}</div><div class="progress-bar-container"><div class="progress-bar-bg"><div class="progress-bar-fill used-fill" :style="'width:' + (stats.total > 0 ? (stats.used/stats.total*100) : 0) + '%'"></div></div></div></div>
-            </div>
-            <div class="card" style="margin-top:2rem;">
-                <div class="card-header"><div class="card-title">使用率分析</div></div>
-                <div class="card-body">
-                    <div v-if="stats.total > 0" class="stats-grid" style="margin-bottom:0;">
-                        <div class="stat-card" style="border:1px solid var(--warning-bg);">
-                            <div class="stat-icon used">&#x1F4CA;</div><div class="stat-info"><div class="stat-label">使用率</div><div class="stat-value" style="color:var(--warning);">{{ (stats.used/stats.total*100).toFixed(1) }}%</div></div></div>
-                        <div class="stat-card" style="border:1px solid var(--success-bg);">
-                            <div class="stat-icon available">&#x1F4CA;</div><div class="stat-info"><div class="stat-label">可用率</div><div class="stat-value" style="color:var(--success);">{{ (stats.available/stats.total*100).toFixed(1) }}%</div></div></div>
+                <div class="pagination">
+                    <span class="pagination-info">共 {{ listTotalElements }} 条</span>
+                    <div class="pagination-btns">
+                        <button type="button" class="btn btn-outline btn-sm" :disabled="listPage <= 1" @click="loadCodes(listFilter, listPage - 1)">上一页</button>
+                        <span class="pagination-current">{{ listPage }} / {{ listTotalPages }}</span>
+                        <button type="button" class="btn btn-outline btn-sm" :disabled="listPage >= listTotalPages" @click="loadCodes(listFilter, listPage + 1)">下一页</button>
                     </div>
-                    <div v-else class="empty-state"><div class="empty-state-icon">&#x1F4ED;</div><div class="empty-state-text">暂无数据</div></div>
                 </div>
             </div>
         </template>
@@ -552,6 +540,7 @@
                 batchClaimResult: [],
                 // 查询
                 codes: [], listFilter: '', listKeyword: '', listStats: { total: 0, available: 0, used: 0 },
+                listPage: 1, listSize: 20, listTotalPages: 1, listTotalElements: 0,
                 // 标记
                 showMarkModal: false, markId: null,
                 showUnmarkModal: false, unmarkId: null,
@@ -660,8 +649,7 @@
             goView(v) {
                 this.view = v;
                 this.menuOpen = false;
-                if (v === 'list') this.loadCodes('');
-                if (v === 'stats') this.loadStats();
+                if (v === 'list') this.loadCodes('', 1);
                 if (v === 'admin') { this.loadUsers(); this.notifiedPending = false; }
             },
 
@@ -732,20 +720,27 @@
             },
 
             // ----- 查询 -----
-            async loadCodes(filter) {
+            async loadCodes(filter, page) {
                 this.listFilter = filter || '';
+                if (page !== undefined) this.listPage = page;
                 const params = new URLSearchParams();
                 if (this.listFilter) params.set('status', this.listFilter);
                 if (this.listKeyword) params.set('keyword', this.listKeyword);
+                params.set('page', this.listPage);
+                params.set('size', this.listSize);
                 try {
                     const resp = await fetch('/admin/code/api/list?' + params.toString());
                     if (!resp.ok) return;
                     const data = await resp.json();
-                    this.codes = (data.codes || []).slice().sort(function(a,b){
-                        if (a.used === b.used) return a.id - b.id;
-                        return a.used ? 1 : -1;
-                    });
+                    this.codes = data.codes || [];
                     this.listStats = { total: data.total, available: data.available, used: data.used };
+                    this.listTotalPages = data.totalPages || 1;
+                    this.listTotalElements = data.totalElements || 0;
+                    // 当前页超出总页数时回退到最后一页（如批量删除后）
+                    if (this.listPage > this.listTotalPages && this.listTotalPages > 0) {
+                        this.listPage = this.listTotalPages;
+                        this.loadCodes(this.listFilter);
+                    }
                 } catch { /* ignore */ }
             },
             confirmMark(id) { this.markId = id; this.showMarkModal = true; },
@@ -775,15 +770,6 @@
                     }
                 } catch { /* ignore */ }
                 this.showUnmarkModal = false; this.unmarkId = null;
-            },
-
-            // ----- 统计 -----
-            async loadStats() {
-                try {
-                    const resp = await fetch('/admin/code/api/stats');
-                    if (!resp.ok) return;
-                    this.stats = await resp.json();
-                } catch { /* ignore */ }
             },
 
             // ----- 用户管理 -----
@@ -885,7 +871,6 @@
                         this.addToast({ title: '批量删除', desc: '已批量删除 ' + data.count + ' 个激活码' });
                         this.selectedIds = [];
                         this.loadCodes(this.listFilter);
-                        this.loadStats();
                     }
                 } catch { /* ignore */ }
                 this.showBatchDeleteModal = false;

@@ -1,7 +1,9 @@
 package xyz.lukix.keygo.service;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import xyz.lukix.keygo.entity.ActivationCode;
@@ -41,6 +43,22 @@ public class ActivationCodeServiceImpl implements ActivationCodeService {
     @Transactional(readOnly = true)
     public List<ActivationCode> listByUsed(boolean used) {
         return activationCodeRepository.findByUsedOrderByCreateTimeDesc(used);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<ActivationCode> pageQuery(String status, String keyword, int page, int size) {
+        Pageable pageable = PageRequest.of(Math.max(page - 1, 0), Math.min(Math.max(size, 1), 100));
+        if (keyword != null && !keyword.isBlank()) {
+            return activationCodeRepository.findByCodeContainingIgnoreCaseOrderByIdAsc(keyword.trim(), pageable);
+        }
+        if ("used".equals(status)) {
+            return activationCodeRepository.findByUsedOrderByFetchTimeDesc(true, pageable);
+        }
+        if ("unused".equals(status)) {
+            return activationCodeRepository.findByUsedOrderByIdAsc(false, pageable);
+        }
+        return activationCodeRepository.findAllByOrderByUsedAscFetchTimeDescIdAsc(pageable);
     }
 
     @Override
