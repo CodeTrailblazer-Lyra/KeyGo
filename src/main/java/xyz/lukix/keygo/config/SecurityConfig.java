@@ -6,6 +6,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -94,6 +95,9 @@ public class SecurityConfig {
                         .requestMatchers("/login", "/register").permitAll()
                         // 激活码申领接口 — 所有认证用户可用
                         .requestMatchers("/admin/code/fetch", "/admin/code/claim-json").authenticated()
+                        // 我的获取记录、获取公告 — 所有认证用户可用
+                        .requestMatchers("/admin/code/api/my-codes").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/admin/code/api/announcements").authenticated()
                         // 激活码管理接口 — 仅管理员可用
                         .requestMatchers("/admin/code/api/**").hasAnyRole("SUPER_ADMIN", "ADMIN")
                         // 用户管理接口 — 仅管理员可用

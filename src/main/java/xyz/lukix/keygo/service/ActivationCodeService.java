@@ -9,9 +9,9 @@ import java.util.Optional;
 public interface ActivationCodeService {
 
     /**
-     * 申领一个可用的激活码（从未使用的池子中分配一个）
+     * 申领一个可用的激活码（从未使用的池子中分配一个），并记录获取人
      */
-    Optional<ActivationCode> claimCode();
+    Optional<ActivationCode> claimCode(String username);
 
     /**
      * 分页查询所有激活码
@@ -59,9 +59,19 @@ public interface ActivationCodeService {
     List<ActivationCode> searchByCode(String keyword);
 
     /**
-     * 批量导入激活码
+     * 查询指定用户获取过的激活码（我的获取记录）
      */
-    int batchImportCodes(List<String> codes);
+    List<ActivationCode> listMyCodes(String username);
+
+    /**
+     * 更新激活码备注
+     */
+    void updateRemark(Long id, String remark);
+
+    /**
+     * 批量导入激活码（每项为 {code, remark}，remark 可为 null）
+     */
+    int batchImportCodes(List<String[]> rows);
 
     /**
      * 批量标记为已使用
@@ -79,9 +89,9 @@ public interface ActivationCodeService {
     int batchMarkAsUnused(List<Long> ids);
 
     /**
-     * 批量申领 N 个激活码（返回实际申领到的列表）
+     * 批量申领 N 个激活码（返回实际申领到的列表），并记录获取人
      */
-    List<ActivationCode> batchClaim(int count);
+    List<ActivationCode> batchClaim(int count, String username);
 
     /**
      * 删除激活码

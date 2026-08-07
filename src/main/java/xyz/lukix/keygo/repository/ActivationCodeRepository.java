@@ -61,6 +61,11 @@ public interface ActivationCodeRepository extends JpaRepository<ActivationCode, 
     long countByUsedFalse();
 
     /**
+     * 按获取人查询激活码（按获取时间倒序）
+     */
+    List<ActivationCode> findByFetchUserOrderByFetchTimeDesc(String fetchUser);
+
+    /**
      * 统计已使用的激活码数量
      */
     long countByUsedTrue();

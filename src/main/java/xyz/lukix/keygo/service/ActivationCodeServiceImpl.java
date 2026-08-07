@@ -22,7 +22,7 @@ public class ActivationCodeServiceImpl implements ActivationCodeService {
 
     @Override
     @Transactional
-    public Optional<ActivationCode> claimCode() {
+    public Optional<ActivationCode> claimCode(String username) {
         List<ActivationCode> codes = activationCodeRepository.findFirstUnusedWithLock(PageRequest.of(0, 1));
         if (codes.isEmpty()) {
             return Optional.empty();
@@ -30,6 +30,7 @@ public class ActivationCodeServiceImpl implements ActivationCodeService {
         ActivationCode code = codes.getFirst();
         code.setUsed(true);
         code.setFetchTime(LocalDateTime.now());
+        code.setFetchUser(username);
         return Optional.of(activationCodeRepository.save(code));
     }
 
@@ -102,14 +103,32 @@ public class ActivationCodeServiceImpl implements ActivationCodeService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public List<ActivationCode> listMyCodes(String username) {
+        return activationCodeRepository.findByFetchUserOrderByFetchTimeDesc(username);
+    }
+
+    @Override
     @Transactional
-    public int batchImportCodes(List<String> codes) {
-        List<ActivationCode> entities = codes.stream()
-                .filter(c -> c != null && !c.isBlank())
-                .map(c -> {
+    public void updateRemark(Long id, String remark) {
+        activationCodeRepository.findById(id).ifPresent(code -> {
+            code.setRemark(remark);
+            activationCodeRepository.save(code);
+        });
+    }
+
+    @Override
+    @Transactional
+    public int batchImportCodes(List<String[]> rows) {
+        List<ActivationCode> entities = rows.stream()
+                .filter(r -> r != null && r.length > 0 && r[0] != null && !r[0].isBlank())
+                .map(r -> {
                     ActivationCode a = new ActivationCode();
-                    a.setCode(c.trim().toUpperCase());
+                    a.setCode(r[0].trim().toUpperCase());
                     a.setUsed(false);
+                    if (r.length > 1 && r[1] != null && !r[1].isBlank()) {
+                        a.setRemark(r[1].trim());
+                    }
                     return a;
                 })
                 .toList();
@@ -154,7 +173,7 @@ public class ActivationCodeServiceImpl implements ActivationCodeService {
 
     @Override
     @Transactional
-    public List<ActivationCode> batchClaim(int count) {
+    public List<ActivationCode> batchClaim(int count, String username) {
         List<ActivationCode> result = new ArrayList<>();
         LocalDateTime now = LocalDateTime.now();
         for (int i = 0; i < count; i++) {
@@ -163,6 +182,7 @@ public class ActivationCodeServiceImpl implements ActivationCodeService {
             ActivationCode code = locked.getFirst();
             code.setUsed(true);
             code.setFetchTime(now);
+            code.setFetchUser(username);
             result.add(activationCodeRepository.save(code));
         }
         return result;
