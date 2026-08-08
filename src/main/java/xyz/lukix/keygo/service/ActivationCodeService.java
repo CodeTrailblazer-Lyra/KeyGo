@@ -59,9 +59,9 @@ public interface ActivationCodeService {
     List<ActivationCode> searchByCode(String keyword);
 
     /**
-     * 查询指定用户获取过的激活码（我的获取记录）
+     * 分页查询指定用户获取过的激活码（我的获取记录，按获取时间倒序）
      */
-    List<ActivationCode> listMyCodes(String username);
+    Page<ActivationCode> pageMyCodes(String username, int page, int size);
 
     /**
      * 更新激活码备注

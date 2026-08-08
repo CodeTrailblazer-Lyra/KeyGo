@@ -3,10 +3,13 @@ package xyz.lukix.keygo.repository;
 import org.springframework.data.jpa.repository.*;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.repository.query.Param;
 import xyz.lukix.keygo.entity.ActivationCode;
 
 import jakarta.persistence.LockModeType;
 import jakarta.persistence.QueryHint;
+import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -61,9 +64,30 @@ public interface ActivationCodeRepository extends JpaRepository<ActivationCode, 
     long countByUsedFalse();
 
     /**
-     * 按获取人查询激活码（按获取时间倒序）
+     * 按获取人分页查询激活码（按获取时间倒序）
      */
-    List<ActivationCode> findByFetchUserOrderByFetchTimeDesc(String fetchUser);
+    Page<ActivationCode> findByFetchUserOrderByFetchTimeDesc(String fetchUser, Pageable pageable);
+
+    /**
+     * 批量标记为已使用（单条 UPDATE ... WHERE id IN，事务内执行）
+     */
+    @Modifying
+    @Query("UPDATE ActivationCode a SET a.used = true, a.fetchTime = :now WHERE a.id IN :ids")
+    int markUsedIn(@Param("ids") Collection<Long> ids, @Param("now") LocalDateTime now);
+
+    /**
+     * 批量标记为未使用（单条 UPDATE ... WHERE id IN，事务内执行）
+     */
+    @Modifying
+    @Query("UPDATE ActivationCode a SET a.used = false, a.fetchTime = null WHERE a.id IN :ids")
+    int markUnusedIn(@Param("ids") Collection<Long> ids);
+
+    /**
+     * 批量删除（单条 DELETE ... WHERE id IN，事务内执行）
+     */
+    @Modifying
+    @Query("DELETE FROM ActivationCode a WHERE a.id IN :ids")
+    int deleteIn(@Param("ids") Collection<Long> ids);
 
     /**
      * 统计已使用的激活码数量

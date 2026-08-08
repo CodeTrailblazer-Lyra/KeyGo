@@ -1,36 +1,38 @@
 package xyz.lukix.keygo.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.annotation.Nullable;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.core.AuthenticationException;
-import org.springframework.security.web.authentication.SimpleUrlAuthenticationFailureHandler;
+import org.springframework.security.web.authentication.AuthenticationFailureHandler;
 import org.springframework.stereotype.Component;
+import xyz.lukix.keygo.common.ApiResponse;
 import xyz.lukix.keygo.entity.SysUser;
 import xyz.lukix.keygo.repository.SysUserRepository;
 
 import java.io.IOException;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 
 @Component
 @RequiredArgsConstructor
-public class CustomAuthFailureHandler extends SimpleUrlAuthenticationFailureHandler {
+public class CustomAuthFailureHandler implements AuthenticationFailureHandler {
 
     private final SysUserRepository sysUserRepository;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
-    public void onAuthenticationFailure(@Nullable HttpServletRequest request, @Nullable HttpServletResponse response,
+    public void onAuthenticationFailure(@Nullable HttpServletRequest request,
+                                        @Nullable HttpServletResponse response,
                                         @Nullable AuthenticationException exception) throws IOException {
         String username = request != null ? request.getParameter("username") : null;
         String errorMsg;
 
         if (exception instanceof DisabledException) {
-            // 用户存在但被禁用，进一步判断原因
             Optional<SysUser> userOpt = sysUserRepository.findByUsername(username);
             if (userOpt.isPresent()) {
                 SysUser user = userOpt.get();
@@ -52,7 +54,13 @@ public class CustomAuthFailureHandler extends SimpleUrlAuthenticationFailureHand
             errorMsg = "登录失败，请重试";
         }
 
-        getRedirectStrategy().sendRedirect(request, response,
-                "/login?error=" + URLEncoder.encode(errorMsg, StandardCharsets.UTF_8));
+        if (response != null) {
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+            response.setCharacterEncoding("UTF-8");
+            response.getWriter().write(
+                    objectMapper.writeValueAsString(ApiResponse.error(401, errorMsg))
+            );
+        }
     }
 }

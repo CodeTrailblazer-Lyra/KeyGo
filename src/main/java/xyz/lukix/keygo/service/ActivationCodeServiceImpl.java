@@ -104,8 +104,9 @@ public class ActivationCodeServiceImpl implements ActivationCodeService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<ActivationCode> listMyCodes(String username) {
-        return activationCodeRepository.findByFetchUserOrderByFetchTimeDesc(username);
+    public Page<ActivationCode> pageMyCodes(String username, int page, int size) {
+        Pageable pageable = PageRequest.of(Math.max(page - 1, 0), Math.min(Math.max(size, 1), 100));
+        return activationCodeRepository.findByFetchUserOrderByFetchTimeDesc(username, pageable);
     }
 
     @Override
@@ -139,14 +140,8 @@ public class ActivationCodeServiceImpl implements ActivationCodeService {
     @Override
     @Transactional
     public int batchMarkAsUsed(List<Long> ids) {
-        List<ActivationCode> codes = activationCodeRepository.findAllById(ids);
-        LocalDateTime now = LocalDateTime.now();
-        for (ActivationCode c : codes) {
-            c.setUsed(true);
-            c.setFetchTime(now);
-        }
-        activationCodeRepository.saveAll(codes);
-        return codes.size();
+        // 单条 UPDATE ... WHERE id IN，避免逐条循环
+        return activationCodeRepository.markUsedIn(ids, LocalDateTime.now());
     }
 
     @Override
@@ -162,13 +157,8 @@ public class ActivationCodeServiceImpl implements ActivationCodeService {
     @Override
     @Transactional
     public int batchMarkAsUnused(List<Long> ids) {
-        List<ActivationCode> codes = activationCodeRepository.findAllById(ids);
-        for (ActivationCode c : codes) {
-            c.setUsed(false);
-            c.setFetchTime(null);
-        }
-        activationCodeRepository.saveAll(codes);
-        return codes.size();
+        // 单条 UPDATE ... WHERE id IN，避免逐条循环
+        return activationCodeRepository.markUnusedIn(ids);
     }
 
     @Override
@@ -197,7 +187,7 @@ public class ActivationCodeServiceImpl implements ActivationCodeService {
     @Override
     @Transactional
     public int batchDeleteCodes(List<Long> ids) {
-        activationCodeRepository.deleteAllById(ids);
-        return ids.size();
+        // 单条 DELETE ... WHERE id IN，避免逐条循环
+        return activationCodeRepository.deleteIn(ids);
     }
 }

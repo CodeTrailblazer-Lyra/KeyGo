@@ -1,6 +1,7 @@
 package xyz.lukix.keygo.config;
 
 import org.springframework.context.annotation.Configuration;
+import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.ViewControllerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
@@ -9,7 +10,14 @@ public class WebConfig implements WebMvcConfigurer {
 
     @Override
     public void addViewControllers(ViewControllerRegistry registry) {
-        registry.addViewController("/").setViewName("redirect:/admin/code/fetch");
-        registry.addViewController("/login").setViewName("login");
+        // SPA 首页
+        registry.addViewController("/").setViewName("forward:/index.html");
+    }
+
+    @Override
+    public void addResourceHandlers(ResourceHandlerRegistry registry) {
+        // 生产环境：Vue 构建产物在 web/dist
+        registry.addResourceHandler("/assets/**")
+                .addResourceLocations("classpath:/static/assets/");
     }
 }

@@ -1,41 +1,49 @@
 package xyz.lukix.keygo.controller;
 
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
+import xyz.lukix.keygo.common.ApiResponse;
+import xyz.lukix.keygo.service.RateLimitService;
 import xyz.lukix.keygo.service.UserService;
 
+import java.time.Duration;
 import java.util.Map;
 
-@Controller
+@RestController
+@RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
 public class AuthController {
 
+    /** 注册限流：每 IP 每小时最多 10 次 */
+    private static final int REGISTER_LIMIT = 10;
+    private static final Duration REGISTER_WINDOW = Duration.ofHours(1);
+
     private final UserService userService;
+    private final RateLimitService rateLimitService;
 
-    /** 注册页面 */
-    @GetMapping("/register")
-    public String registerPage() {
-        return "login"; // 与登录页共用模板，由前端参数控制显示
-    }
-
-    /** 处理注册请求 */
+    /** 处理注册请求（IP 维度限流，防止批量注册） */
     @PostMapping("/register")
-    @ResponseBody
-    public Map<String, Object> doRegister(@RequestBody Map<String, String> body) {
+    public ApiResponse<Void> doRegister(@RequestBody Map<String, String> body,
+                                        HttpServletRequest request) {
+        String clientIp = rateLimitService.resolveClientIp(request);
+        if (!rateLimitService.tryAcquire("register:" + clientIp, REGISTER_LIMIT, REGISTER_WINDOW)) {
+            return ApiResponse.error(429, "注册过于频繁，请1小时后再试");
+        }
+
         String username = body.getOrDefault("username", "").trim();
         String password = body.getOrDefault("password", "");
         if (username.length() < 2) {
-            return Map.of("success", false, "message", "用户名至少2个字符");
+            return ApiResponse.error(400, "用户名至少2个字符");
         }
         if (password.length() < 4) {
-            return Map.of("success", false, "message", "密码至少4个字符");
+            return ApiResponse.error(400, "密码至少4个字符");
         }
         try {
             userService.register(username, password);
-            return Map.of("success", true, "message", "注册成功，请等待管理员审核");
+            return ApiResponse.ok("注册成功，请等待管理员审核", null);
         } catch (IllegalArgumentException e) {
-            return Map.of("success", false, "message", e.getMessage());
+            return ApiResponse.error(400, e.getMessage());
         }
     }
 }
