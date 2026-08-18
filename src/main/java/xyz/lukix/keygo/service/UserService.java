@@ -20,11 +20,8 @@ public interface UserService {
     /** 超级管理员删除用户 */
     void deleteUser(Long userId, String operatorUsername);
 
-    /** 修改用户角色（仅 SUPER_ADMIN 可操作 ADMIN） */
-    SysUser changeRole(Long targetUserId, Role newRole, String operatorUsername);
-
-    /** 获取所有用户 */
-    List<SysUser> listAllUsers();
+    /** 获取操作者可见的用户列表（同级及以下角色，不含更高等级账户） */
+    List<SysUser> listVisibleUsers(String operatorUsername);
 
     /** 获取待审核用户 */
     List<SysUser> listPendingUsers();
@@ -46,4 +43,14 @@ public interface UserService {
      * @param operatorUsername 操作者用户名
      */
     void changePassword(Long targetUserId, String oldPassword, String newPassword, String operatorUsername);
+
+    /**
+     * 修改用户角色（仅超级管理员可用）
+     * <p>规则：超级管理员可修改所有非超级管理员用户的角色；不能修改自己的角色；不能修改超级管理员用户的角色。</p>
+     *
+     * @param targetUserId     目标用户ID
+     * @param newRole          新角色
+     * @param operatorUsername 操作者用户名
+     */
+    void changeRole(Long targetUserId, Role newRole, String operatorUsername);
 }

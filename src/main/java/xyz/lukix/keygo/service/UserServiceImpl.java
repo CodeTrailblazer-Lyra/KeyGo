@@ -113,32 +113,15 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    @Transactional
-    public SysUser changeRole(Long targetUserId, Role newRole, String operatorUsername) {
+    @Transactional(readOnly = true)
+    public List<SysUser> listVisibleUsers(String operatorUsername) {
         SysUser operator = sysUserRepository.findByUsername(operatorUsername)
                 .orElseThrow(() -> new IllegalArgumentException("操作者不存在"));
-        SysUser target = sysUserRepository.findById(targetUserId)
-                .orElseThrow(() -> new IllegalArgumentException("目标用户不存在"));
-
-        if (operator.getRole() == Role.ROLE_SUPER_ADMIN) {
-            // SUPER_ADMIN 可以修改任何人
-            target.setRole(newRole);
-            return sysUserRepository.save(target);
-        } else if (operator.getRole() == Role.ROLE_ADMIN) {
-            // ADMIN 只能修改 USER 角色
-            if (target.getRole() == Role.ROLE_USER) {
-                target.setRole(newRole);
-                return sysUserRepository.save(target);
-            }
-            throw new SecurityException("无权修改该用户的角色");
-        }
-        throw new SecurityException("无权修改用户角色");
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public List<SysUser> listAllUsers() {
-        return sysUserRepository.findAllByOrderByCreateTimeDesc();
+        // 角色等级：ROLE_SUPER_ADMIN(0) > ROLE_ADMIN(1) > ROLE_USER(2)，依赖枚举声明顺序
+        // 仅返回同级及以下等级的用户，不暴露更高等级账户
+        return sysUserRepository.findAllByOrderByCreateTimeDesc().stream()
+                .filter(u -> u.getRole().ordinal() >= operator.getRole().ordinal())
+                .toList();
     }
 
     @Override
@@ -165,5 +148,31 @@ public class UserServiceImpl implements UserService {
         return sysUserRepository.findByUsername(username)
                 .map(u -> u.getRole() == Role.ROLE_ADMIN || u.getRole() == Role.ROLE_SUPER_ADMIN)
                 .orElse(false);
+    }
+
+    @Override
+    @Transactional
+    public void changeRole(Long targetUserId, Role newRole, String operatorUsername) {
+        if (newRole == null) {
+            throw new IllegalArgumentException("新角色不能为空");
+        }
+        SysUser operator = sysUserRepository.findByUsername(operatorUsername)
+                .orElseThrow(() -> new IllegalArgumentException("操作者不存在"));
+        // 仅超级管理员可修改角色
+        if (operator.getRole() != Role.ROLE_SUPER_ADMIN) {
+            throw new SecurityException("仅超级管理员可修改用户角色");
+        }
+        SysUser target = sysUserRepository.findById(targetUserId)
+                .orElseThrow(() -> new IllegalArgumentException("目标用户不存在"));
+        // 不能修改自己的角色
+        if (target.getId().equals(operator.getId())) {
+            throw new IllegalArgumentException("不能修改自己的角色");
+        }
+        // 不能修改超级管理员用户的角色
+        if (target.getRole() == Role.ROLE_SUPER_ADMIN) {
+            throw new SecurityException("不能修改超级管理员的角色");
+        }
+        target.setRole(newRole);
+        sysUserRepository.save(target);
     }
 }

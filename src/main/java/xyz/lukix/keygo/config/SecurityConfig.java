@@ -10,6 +10,7 @@ import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -33,6 +34,7 @@ import java.util.Map;
 
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity
 @RequiredArgsConstructor
 public class SecurityConfig {
 
@@ -149,6 +151,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/announcements").authenticated()
                         .requestMatchers("/api/v1/admin/users/me", "/api/v1/admin/users/password").authenticated()
                         // 仅管理员可用
+                        // 操作日志仅对管理员及以上角色开放（显式声明，避免依赖前缀匹配）
+                        .requestMatchers("/api/v1/admin/codes/logs", "/api/v1/admin/codes/logs/**").hasAnyRole("SUPER_ADMIN", "ADMIN")
                         .requestMatchers("/api/v1/admin/users/**").hasAnyRole("SUPER_ADMIN", "ADMIN")
                         .requestMatchers("/api/v1/admin/codes/**").hasAnyRole("SUPER_ADMIN", "ADMIN")
                         .requestMatchers(HttpMethod.POST, "/api/v1/announcements").hasAnyRole("SUPER_ADMIN", "ADMIN")

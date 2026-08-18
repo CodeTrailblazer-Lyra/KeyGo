@@ -1,6 +1,7 @@
 package xyz.lukix.keygo.controller;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import xyz.lukix.keygo.common.ApiResponse;
@@ -29,11 +30,11 @@ public class AdminController {
         return ApiResponse.ok(result);
     }
 
-    /** 获取所有用户（管理员） */
+    /** 获取用户列表（仅返回同级及以下角色，不暴露更高等级账户） */
     @GetMapping
-    public ApiResponse<List<Map<String, Object>>> listUsers() {
+    public ApiResponse<List<Map<String, Object>>> listUsers(Authentication auth) {
         List<Map<String, Object>> list = new ArrayList<>();
-        for (SysUser u : userService.listAllUsers()) {
+        for (SysUser u : userService.listVisibleUsers(auth.getName())) {
             Map<String, Object> m = new HashMap<>();
             m.put("id", u.getId());
             m.put("username", u.getUsername());
@@ -74,29 +75,6 @@ public class AdminController {
         return ApiResponse.ok("已拒绝该用户", null);
     }
 
-    /** 修改角色（JSON body：{"role":"ROLE_ADMIN"}） */
-    @PatchMapping("/{id}/role")
-    public ApiResponse<Void> changeRole(@PathVariable Long id,
-                                        @RequestBody Map<String, String> body,
-                                        Authentication auth) {
-        String roleStr = body.get("role");
-        if (roleStr == null || roleStr.isBlank()) {
-            return ApiResponse.error(400, "缺少角色参数");
-        }
-        Role role;
-        try {
-            role = Role.valueOf(roleStr.trim().toUpperCase());
-        } catch (IllegalArgumentException e) {
-            return ApiResponse.error(400, "非法角色值: " + roleStr);
-        }
-        try {
-            userService.changeRole(id, role, auth.getName());
-            return ApiResponse.ok("角色已更新", null);
-        } catch (SecurityException | IllegalArgumentException e) {
-            return ApiResponse.error(403, e.getMessage());
-        }
-    }
-
     /** 超级管理员删除用户 */
     @DeleteMapping("/{id}")
     public ApiResponse<Void> deleteUser(@PathVariable Long id, Authentication auth) {
@@ -119,6 +97,32 @@ public class AdminController {
             userService.changePassword(targetUserId, oldPassword, newPassword, auth.getName());
             return ApiResponse.ok("密码修改成功", null);
         } catch (SecurityException | IllegalArgumentException e) {
+            return ApiResponse.error(400, e.getMessage());
+        }
+    }
+
+    /**
+     * 修改用户角色（仅超级管理员）
+     * 规则：可修改所有非超级管理员用户的角色；不能修改自己；不能修改超级管理员用户
+     */
+    @PatchMapping("/{id}/role")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ApiResponse<Void> changeRole(@PathVariable Long id,
+                                        @RequestBody Map<String, Object> body,
+                                        Authentication auth) {
+        String roleStr = body.get("role") != null ? body.get("role").toString() : "";
+        Role newRole;
+        try {
+            newRole = Role.valueOf(roleStr);
+        } catch (IllegalArgumentException e) {
+            return ApiResponse.error(400, "无效的角色: " + roleStr);
+        }
+        try {
+            userService.changeRole(id, newRole, auth.getName());
+            return ApiResponse.ok("角色已更新为 " + newRole.name(), null);
+        } catch (SecurityException e) {
+            return ApiResponse.error(403, e.getMessage());
+        } catch (IllegalArgumentException e) {
             return ApiResponse.error(400, e.getMessage());
         }
     }

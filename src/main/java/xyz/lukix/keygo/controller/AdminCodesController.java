@@ -4,6 +4,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.data.domain.Page;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
@@ -241,8 +242,9 @@ public class AdminCodesController {
         return ApiResponse.ok("激活码已删除", null);
     }
 
-    /** 查询操作日志（分页，仅管理员） */
+    /** 查询操作日志（分页，仅管理员及以上角色可查看） */
     @GetMapping("/logs")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
     public ApiResponse<Map<String, Object>> logs(@RequestParam(defaultValue = "1") int page,
                                                  @RequestParam(defaultValue = "20") int size) {
         Page<OperationLog> logs = operationLogService.pageLogs(page, size);
