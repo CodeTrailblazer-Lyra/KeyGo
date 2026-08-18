@@ -29,6 +29,10 @@ public class Announcement {
     @Column(nullable = false)
     private Boolean pinned = false;
 
+    /** 是否在获取页显示（false=暂不上线） */
+    @Column(nullable = false)
+    private Boolean visible = true;
+
     @CreationTimestamp
     private LocalDateTime createTime;
 }

@@ -149,13 +149,16 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/codes/claim", "/api/v1/codes/batch-claim", "/api/v1/codes/my-codes").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/v1/codes/stats").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/v1/announcements").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/units").authenticated()
                         .requestMatchers("/api/v1/admin/users/me", "/api/v1/admin/users/password").authenticated()
                         // 仅管理员可用
                         // 操作日志仅对管理员及以上角色开放（显式声明，避免依赖前缀匹配）
                         .requestMatchers("/api/v1/admin/codes/logs", "/api/v1/admin/codes/logs/**").hasAnyRole("SUPER_ADMIN", "ADMIN")
                         .requestMatchers("/api/v1/admin/users/**").hasAnyRole("SUPER_ADMIN", "ADMIN")
                         .requestMatchers("/api/v1/admin/codes/**").hasAnyRole("SUPER_ADMIN", "ADMIN")
+                        .requestMatchers("/api/v1/admin/units/**").hasAnyRole("SUPER_ADMIN", "ADMIN")
                         .requestMatchers(HttpMethod.POST, "/api/v1/announcements").hasAnyRole("SUPER_ADMIN", "ADMIN")
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/announcements/*").hasAnyRole("SUPER_ADMIN", "ADMIN")
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/announcements/*").hasAnyRole("SUPER_ADMIN", "ADMIN")
                         // SPA 静态资源与其他
                         .anyRequest().permitAll()

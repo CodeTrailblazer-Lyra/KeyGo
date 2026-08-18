@@ -22,7 +22,7 @@ public class ActivationCodeServiceImpl implements ActivationCodeService {
 
     @Override
     @Transactional
-    public Optional<ActivationCode> claimCode(String username) {
+    public Optional<ActivationCode> claimCode(String username, String remark) {
         List<ActivationCode> codes = activationCodeRepository.findFirstUnusedWithLock(PageRequest.of(0, 1));
         if (codes.isEmpty()) {
             return Optional.empty();
@@ -31,6 +31,11 @@ public class ActivationCodeServiceImpl implements ActivationCodeService {
         code.setUsed(true);
         code.setFetchTime(LocalDateTime.now());
         code.setFetchUser(username);
+        // 备注仅在传入非空时覆盖，缺省/空白保持原值
+        if (remark != null && !remark.isBlank()) {
+            String trimmed = remark.trim();
+            code.setRemark(trimmed.length() > 200 ? trimmed.substring(0, 200) : trimmed);
+        }
         return Optional.of(activationCodeRepository.save(code));
     }
 

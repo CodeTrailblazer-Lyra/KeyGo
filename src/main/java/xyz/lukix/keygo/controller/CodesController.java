@@ -43,18 +43,24 @@ public class CodesController {
         return ApiResponse.ok(result);
     }
 
-    /** 申领一个激活码（每用户每分钟限 5 次） */
+    /**
+     * 申领一个激活码（每用户每分钟限 5 次）
+     * body 可选字段 unit（使用单位）：非空时写入该激活码备注，缺省或为空时备注保持原值
+     */
     @PostMapping("/claim")
-    public ApiResponse<Map<String, Object>> claim(@AuthenticationPrincipal UserDetails user) {
+    public ApiResponse<Map<String, Object>> claim(@RequestBody(required = false) Map<String, String> body,
+                                                  @AuthenticationPrincipal UserDetails user) {
         String username = user != null ? user.getUsername() : null;
         if (!rateLimitService.tryAcquire("claim:" + username, CLAIM_LIMIT, CLAIM_WINDOW)) {
             return ApiResponse.error(429, "申领过于频繁，请1分钟后再试");
         }
-        Optional<ActivationCode> codeOpt = activationCodeService.claimCode(username);
+        String unit = body != null ? body.get("unit") : null;
+        Optional<ActivationCode> codeOpt = activationCodeService.claimCode(username, unit);
         Map<String, Object> result = new HashMap<>();
         if (codeOpt.isPresent()) {
             ActivationCode code = codeOpt.get();
-            operationLogService.record(username, "CLAIM", code.getCode(), null);
+            operationLogService.record(username, "CLAIM", code.getCode(),
+                    unit != null && !unit.isBlank() ? "单位: " + unit.trim() : null);
             result.put("code", code.getCode());
             result.put("fetchTime", code.getFetchTime());
         } else {

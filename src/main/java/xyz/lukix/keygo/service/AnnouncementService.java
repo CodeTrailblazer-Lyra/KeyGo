@@ -23,14 +23,27 @@ public class AnnouncementService {
         return announcementRepository.findAllByOrderByPinnedDescCreateTimeDesc();
     }
 
-    /** 发布公告 */
+    /** 发布公告（visible=是否在获取页显示） */
     @Transactional
-    public Announcement publish(String content, String publisher, boolean pinned) {
+    public Announcement publish(String content, String publisher, boolean pinned, boolean visible) {
         Announcement a = new Announcement();
         a.setContent(content);
         a.setPublisher(publisher);
         a.setPinned(pinned);
+        a.setVisible(visible);
         return announcementRepository.save(a);
+    }
+
+    /** 更新公告可见性；公告不存在时返回 false */
+    @Transactional
+    public boolean updateVisible(Long id, boolean visible) {
+        return announcementRepository.findById(id)
+                .map(a -> {
+                    a.setVisible(visible);
+                    announcementRepository.save(a);
+                    return true;
+                })
+                .orElse(false);
     }
 
     /** 删除公告 */

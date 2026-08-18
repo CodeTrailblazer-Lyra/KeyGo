@@ -3,6 +3,7 @@ spring:
     activate:
       on-profile: dev
   datasource:
+    name: Docker_PostgreSQL
     url: jdbc:postgresql://localhost:5432/keygo
     username: postgres
     password: "admin"

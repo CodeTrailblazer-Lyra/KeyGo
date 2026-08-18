@@ -29,7 +29,7 @@ public class AnnouncementController {
         return ApiResponse.ok(announcementService.listAll());
     }
 
-    /** 发布公告（仅管理员） */
+    /** 发布公告（仅管理员），body 可选字段：pinned（默认 false）、visible（默认 true，是否在获取页显示） */
     @PostMapping
     public ApiResponse<Map<String, Object>> publish(@RequestBody Map<String, Object> body,
                                                     @AuthenticationPrincipal UserDetails user) {
@@ -39,10 +39,31 @@ public class AnnouncementController {
         }
         if (content.length() > 500) content = content.substring(0, 500);
         boolean pinned = Boolean.TRUE.equals(body.get("pinned"));
+        // 缺省时默认显示（向后兼容：旧前端不传该字段即发布即上线）
+        Object visibleVal = body.get("visible");
+        boolean visible = visibleVal == null || Boolean.TRUE.equals(visibleVal);
         String publisher = user != null ? user.getUsername() : null;
-        Announcement a = announcementService.publish(content, publisher, pinned);
+        Announcement a = announcementService.publish(content, publisher, pinned, visible);
         operationLogService.record(publisher, "PUBLISH_ANNOUNCEMENT", String.valueOf(a.getId()), content);
         return ApiResponse.ok(Map.of("id", a.getId()));
+    }
+
+    /** 切换公告在获取页的显示状态（仅管理员），body: {"visible": true|false} */
+    @PutMapping("/{id}")
+    public ApiResponse<Void> updateVisible(@PathVariable Long id,
+                                           @RequestBody Map<String, Object> body,
+                                           @AuthenticationPrincipal UserDetails user) {
+        Object visibleVal = body == null ? null : body.get("visible");
+        if (!(visibleVal instanceof Boolean visible)) {
+            return ApiResponse.error(400, "visible 必须为布尔值");
+        }
+        if (!announcementService.updateVisible(id, visible)) {
+            return ApiResponse.error(404, "公告不存在");
+        }
+        String username = user != null ? user.getUsername() : null;
+        operationLogService.record(username, "ANNOUNCEMENT_VISIBLE", String.valueOf(id),
+                visible ? "显示" : "隐藏");
+        return ApiResponse.ok(visible ? "公告已设为显示" : "公告已设为隐藏", null);
     }
 
     /** 删除公告（仅管理员） */

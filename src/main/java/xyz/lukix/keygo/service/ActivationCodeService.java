@@ -9,9 +9,10 @@ import java.util.Optional;
 public interface ActivationCodeService {
 
     /**
-     * 申领一个可用的激活码（从未使用的池子中分配一个），并记录获取人
+     * 申领一个可用的激活码（从未使用的池子中分配一个），并记录获取人；
+     * remark 非空时写入该激活码备注（为空时保持原值）
      */
-    Optional<ActivationCode> claimCode(String username);
+    Optional<ActivationCode> claimCode(String username, String remark);
 
     /**
      * 分页查询所有激活码
