@@ -11,7 +11,10 @@ import java.time.LocalDateTime;
  */
 @Data
 @Entity
-@Table(name = "operation_log")
+@Table(name = "operation_log", indexes = {
+        // 日志列表按 create_time 倒序分页
+        @Index(name = "idx_operation_log_create_time", columnList = "create_time")
+})
 public class OperationLog {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

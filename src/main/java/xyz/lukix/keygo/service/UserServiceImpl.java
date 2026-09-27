@@ -36,20 +36,20 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public void approveUser(Long userId) {
-        sysUserRepository.findById(userId).ifPresent(u -> {
-            u.setApproved(true);
-            sysUserRepository.save(u);
-        });
+        SysUser u = sysUserRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("用户不存在"));
+        u.setApproved(true);
+        sysUserRepository.save(u);
     }
 
     @Override
     @Transactional
     public void rejectUser(Long userId) {
-        sysUserRepository.findById(userId).ifPresent(u -> {
-            u.setApproved(false);
-            u.setEnabled(false);
-            sysUserRepository.save(u);
-        });
+        SysUser u = sysUserRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("用户不存在"));
+        u.setApproved(false);
+        u.setEnabled(false);
+        sysUserRepository.save(u);
     }
 
     @Override
@@ -134,20 +134,6 @@ public class UserServiceImpl implements UserService {
     @Transactional(readOnly = true)
     public Optional<SysUser> findByUsername(String username) {
         return sysUserRepository.findByUsername(username);
-    }
-
-    @Override
-    public boolean isSuperAdmin(String username) {
-        return sysUserRepository.findByUsername(username)
-                .map(u -> u.getRole() == Role.ROLE_SUPER_ADMIN)
-                .orElse(false);
-    }
-
-    @Override
-    public boolean isAdmin(String username) {
-        return sysUserRepository.findByUsername(username)
-                .map(u -> u.getRole() == Role.ROLE_ADMIN || u.getRole() == Role.ROLE_SUPER_ADMIN)
-                .orElse(false);
     }
 
     @Override

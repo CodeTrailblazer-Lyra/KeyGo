@@ -5,6 +5,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import xyz.lukix.keygo.common.ApiResponse;
+import xyz.lukix.keygo.dto.PasswordChangeRequest;
+import xyz.lukix.keygo.dto.RoleChangeRequest;
 import xyz.lukix.keygo.entity.Role;
 import xyz.lukix.keygo.entity.SysUser;
 import xyz.lukix.keygo.service.UserService;
@@ -64,15 +66,23 @@ public class AdminController {
     /** 审核通过 */
     @PatchMapping("/{id}/approve")
     public ApiResponse<Void> approve(@PathVariable Long id) {
-        userService.approveUser(id);
-        return ApiResponse.ok("审核通过", null);
+        try {
+            userService.approveUser(id);
+            return ApiResponse.ok("审核通过", null);
+        } catch (IllegalArgumentException e) {
+            return ApiResponse.error(404, e.getMessage());
+        }
     }
 
     /** 拒绝用户 */
     @PatchMapping("/{id}/reject")
     public ApiResponse<Void> reject(@PathVariable Long id) {
-        userService.rejectUser(id);
-        return ApiResponse.ok("已拒绝该用户", null);
+        try {
+            userService.rejectUser(id);
+            return ApiResponse.ok("已拒绝该用户", null);
+        } catch (IllegalArgumentException e) {
+            return ApiResponse.error(404, e.getMessage());
+        }
     }
 
     /** 超级管理员删除用户 */
@@ -81,22 +91,23 @@ public class AdminController {
         try {
             userService.deleteUser(id, auth.getName());
             return ApiResponse.ok("用户已删除", null);
-        } catch (SecurityException | IllegalArgumentException e) {
+        } catch (SecurityException e) {
             return ApiResponse.error(403, e.getMessage());
+        } catch (IllegalArgumentException e) {
+            return ApiResponse.error(400, e.getMessage());
         }
     }
 
     /** 修改密码（JSON body） */
     @PatchMapping("/password")
-    public ApiResponse<Void> changePassword(@RequestBody Map<String, Object> body,
+    public ApiResponse<Void> changePassword(@RequestBody PasswordChangeRequest body,
                                             Authentication auth) {
         try {
-            Long targetUserId = body.get("userId") != null ? ((Number) body.get("userId")).longValue() : null;
-            String oldPassword = (String) body.get("oldPassword");
-            String newPassword = (String) body.get("newPassword");
-            userService.changePassword(targetUserId, oldPassword, newPassword, auth.getName());
+            userService.changePassword(body.userId(), body.oldPassword(), body.newPassword(), auth.getName());
             return ApiResponse.ok("密码修改成功", null);
-        } catch (SecurityException | IllegalArgumentException e) {
+        } catch (SecurityException e) {
+            return ApiResponse.error(403, e.getMessage());
+        } catch (IllegalArgumentException e) {
             return ApiResponse.error(400, e.getMessage());
         }
     }
@@ -108,9 +119,9 @@ public class AdminController {
     @PatchMapping("/{id}/role")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ApiResponse<Void> changeRole(@PathVariable Long id,
-                                        @RequestBody Map<String, Object> body,
+                                        @RequestBody RoleChangeRequest body,
                                         Authentication auth) {
-        String roleStr = body.get("role") != null ? body.get("role").toString() : "";
+        String roleStr = body.role() != null ? body.role() : "";
         Role newRole;
         try {
             newRole = Role.valueOf(roleStr);

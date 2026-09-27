@@ -20,6 +20,9 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class AnnouncementController {
 
+    /** 公告内容最大长度 */
+    private static final int MAX_CONTENT_LENGTH = 500;
+
     private final AnnouncementService announcementService;
     private final OperationLogService operationLogService;
 
@@ -37,7 +40,7 @@ public class AnnouncementController {
         if (content.isBlank()) {
             return ApiResponse.error(400, "公告内容不能为空");
         }
-        if (content.length() > 500) content = content.substring(0, 500);
+        if (content.length() > MAX_CONTENT_LENGTH) content = content.substring(0, MAX_CONTENT_LENGTH);
         boolean pinned = Boolean.TRUE.equals(body.get("pinned"));
         // 缺省时默认显示（向后兼容：旧前端不传该字段即发布即上线）
         Object visibleVal = body.get("visible");
@@ -68,8 +71,13 @@ public class AnnouncementController {
 
     /** 删除公告（仅管理员） */
     @DeleteMapping("/{id}")
-    public ApiResponse<Void> delete(@PathVariable Long id) {
-        announcementService.delete(id);
+    public ApiResponse<Void> delete(@PathVariable Long id,
+                                    @AuthenticationPrincipal UserDetails user) {
+        if (!announcementService.delete(id)) {
+            return ApiResponse.error(404, "公告不存在");
+        }
+        String username = user != null ? user.getUsername() : null;
+        operationLogService.record(username, "ANNOUNCEMENT_DELETE", String.valueOf(id), null);
         return ApiResponse.ok("公告已删除", null);
     }
 }

@@ -29,6 +29,8 @@ public class AdminUnitsController {
 
     /** 单位名称最大长度（与表结构一致） */
     private static final int MAX_NAME_LENGTH = 100;
+    /** 单次导入允许的最大条数（防超大文件拖垮内存/事务） */
+    private static final int MAX_IMPORT_ROWS = 5000;
 
     private final UnitService unitService;
     private final OperationLogService operationLogService;
@@ -80,6 +82,9 @@ public class AdminUnitsController {
                 names = parseExcel(file);
             } else {
                 names = parseText(file);
+            }
+            if (names.size() > MAX_IMPORT_ROWS) {
+                return ApiResponse.error(400, "单次导入最多 " + MAX_IMPORT_ROWS + " 条，请拆分文件");
             }
             UnitService.ImportResult result = unitService.importUnits(names);
             String username = user != null ? user.getUsername() : null;

@@ -3,9 +3,11 @@ package xyz.lukix.keygo.service;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.core.type.TypeReference;
 import xyz.lukix.keygo.entity.Unit;
 import xyz.lukix.keygo.repository.UnitRepository;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -19,14 +21,22 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class UnitService {
 
+    /** 单位列表缓存：申领页下拉每次加载都命中同一份，增删改后主动失效 */
+    private static final String LIST_CACHE_KEY = "keygo:cache:units";
+    private static final Duration LIST_CACHE_TTL = Duration.ofMinutes(10);
+    private static final TypeReference<List<Unit>> LIST_CACHE_TYPE = new TypeReference<>() {
+    };
+
     private final UnitRepository unitRepository;
+    private final RedisJsonCache redisJsonCache;
 
     /**
      * 查询所有使用单位（按ID升序）
      */
     @Transactional(readOnly = true)
     public List<Unit> listAll() {
-        return unitRepository.findAllByOrderByIdAsc();
+        return redisJsonCache.getOrLoad(LIST_CACHE_KEY, LIST_CACHE_TTL, LIST_CACHE_TYPE,
+                () -> unitRepository.findAllByOrderByIdAsc());
     }
 
     /**
@@ -39,7 +49,9 @@ public class UnitService {
         }
         Unit unit = new Unit();
         unit.setName(name);
-        return Optional.of(unitRepository.save(unit));
+        Unit saved = unitRepository.save(unit);
+        redisJsonCache.evict(LIST_CACHE_KEY);
+        return Optional.of(saved);
     }
 
     /**
@@ -66,6 +78,9 @@ public class UnitService {
             toAdd.add(unit);
         }
         unitRepository.saveAll(toAdd);
+        if (!toAdd.isEmpty()) {
+            redisJsonCache.evict(LIST_CACHE_KEY);
+        }
         return new ImportResult(toAdd.size(), duplicates.size(), duplicates);
     }
 
@@ -78,6 +93,7 @@ public class UnitService {
             return false;
         }
         unitRepository.deleteById(id);
+        redisJsonCache.evict(LIST_CACHE_KEY);
         return true;
     }
 

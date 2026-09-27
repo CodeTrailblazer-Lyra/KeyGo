@@ -2,8 +2,8 @@ package xyz.lukix.keygo.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletResponse;
-import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.dao.EmptyResultDataAccessException;
@@ -35,13 +35,30 @@ import java.util.Map;
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
-@RequiredArgsConstructor
 public class SecurityConfig {
 
     private final DbUserDetailsService dbUserDetailsService;
     private final CustomAuthFailureHandler authFailureHandler;
     private final JdbcTemplate jdbcTemplate;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper;
+    /** Remember-Me 签名密钥：生产环境通过环境变量 KEYGO_SECURITY_REMEMBER_ME_KEY 覆盖 */
+    private final String rememberMeKey;
+    /** CORS 允许的来源列表（逗号分隔配置项） */
+    private final List<String> corsAllowedOrigins;
+
+    public SecurityConfig(DbUserDetailsService dbUserDetailsService,
+                          CustomAuthFailureHandler authFailureHandler,
+                          JdbcTemplate jdbcTemplate,
+                          ObjectMapper objectMapper,
+                          @Value("${keygo.security.remember-me-key:KeyGoRememberMeKey}") String rememberMeKey,
+                          @Value("${keygo.cors.allowed-origins:http://localhost:5173}") List<String> corsAllowedOrigins) {
+        this.dbUserDetailsService = dbUserDetailsService;
+        this.authFailureHandler = authFailureHandler;
+        this.jdbcTemplate = jdbcTemplate;
+        this.objectMapper = objectMapper;
+        this.rememberMeKey = rememberMeKey;
+        this.corsAllowedOrigins = corsAllowedOrigins;
+    }
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -102,7 +119,7 @@ public class SecurityConfig {
     @Bean
     public CustomRememberMeServices rememberMeServices() {
         CustomRememberMeServices services = new CustomRememberMeServices(
-                "KeyGoRememberMeKey", dbUserDetailsService, persistentTokenRepository());
+                rememberMeKey, dbUserDetailsService, persistentTokenRepository());
         services.setTokenValiditySeconds(14 * 24 * 60 * 60);
         return services;
     }
@@ -110,7 +127,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of("http://localhost:5173", "https://118.178.104.187"));
+        config.setAllowedOrigins(corsAllowedOrigins);
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);
@@ -144,6 +161,8 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/health").permitAll()
                         .requestMatchers("/css/**", "/js/**", "/images/**", "/webjars/**", "/favicon.ico").permitAll()
                         .requestMatchers("/api/v1/auth/login", "/api/v1/auth/register").permitAll()
+                        // 设备核销由外部软件发起、无登录态：靠 IP 限流 + 码空间熵防护，失败话术统一防枚举
+                        .requestMatchers(HttpMethod.POST, "/api/v1/codes/redeem").permitAll()
                         // 认证用户可用
                         .requestMatchers("/api/v1/auth/logout").authenticated()
                         .requestMatchers("/api/v1/codes/claim", "/api/v1/codes/batch-claim", "/api/v1/codes/my-codes").authenticated()
@@ -160,6 +179,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/v1/announcements").hasAnyRole("SUPER_ADMIN", "ADMIN")
                         .requestMatchers(HttpMethod.PUT, "/api/v1/announcements/*").hasAnyRole("SUPER_ADMIN", "ADMIN")
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/announcements/*").hasAnyRole("SUPER_ADMIN", "ADMIN")
+                        // 未显式声明的 /api/** 端点默认要求认证，防止新增接口漏配保护规则
+                        .requestMatchers("/api/**").authenticated()
                         // SPA 静态资源与其他
                         .anyRequest().permitAll()
                 )

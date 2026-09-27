@@ -16,17 +16,45 @@ import java.util.Optional;
 public interface ActivationCodeRepository extends JpaRepository<ActivationCode, Long> {
 
     /**
-     * 获取一个未使用的激活码（按ID升序，确保FIFO）
+     * 统计结果投影：总数与已使用数（单条聚合查询，可用数 = total - used）
      */
-    Optional<ActivationCode> findFirstByUsedFalseOrderByIdAsc();
+    interface StatsView {
+        long getTotal();
+
+        long getUsed();
+    }
 
     /**
-     * 悲观锁方式获取一个未使用的激活码（防止并发抢码）
+     * 悲观锁方式获取未使用的激活码（按ID升序保证FIFO，取几条由 Pageable 的 size 决定）。
+     * 仅限有明文的码参与申领：生成制新码明文不落库，申领后用户看不到码，故排除
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @QueryHints(@QueryHint(name = "jakarta.persistence.lock.timeout", value = "5000"))
-    @Query("SELECT a FROM ActivationCode a WHERE a.used = false ORDER BY a.id ASC")
-    List<ActivationCode> findFirstUnusedWithLock(Pageable pageable);
+    @Query("SELECT a FROM ActivationCode a WHERE a.used = false AND a.code IS NOT NULL ORDER BY a.id ASC")
+    List<ActivationCode> findUnusedWithLock(Pageable pageable);
+
+    /**
+     * 核销悲观锁查询：按 codeHash 精确匹配未使用的激活码（新码主路径）。
+     * PG 行锁下并发核销同一码时，后到事务会等锁并在提交后重新校验 used=false，天然防重复核销
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @QueryHints(@QueryHint(name = "jakarta.persistence.lock.timeout", value = "5000"))
+    @Query("SELECT a FROM ActivationCode a WHERE a.codeHash = :codeHash AND a.used = false")
+    List<ActivationCode> findUnusedByCodeHashForUpdate(@Param("codeHash") String codeHash);
+
+    /**
+     * 核销悲观锁降级查询：按明文 code 匹配（仅存量老数据，新码 code 为 NULL 不会命中）
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @QueryHints(@QueryHint(name = "jakarta.persistence.lock.timeout", value = "5000"))
+    @Query("SELECT a FROM ActivationCode a WHERE a.code = :code AND a.used = false")
+    List<ActivationCode> findUnusedByCodeForUpdate(@Param("code") String code);
+
+    /** 按 codeHash 查询（不加锁，用于区分"不存在"与"已被核销"） */
+    Optional<ActivationCode> findByCodeHash(String codeHash);
+
+    /** 按明文 code 查询（不加锁，存量数据） */
+    Optional<ActivationCode> findByCode(String code);
 
     /**
      * 按状态查询激活码列表（按创建时间降序）
@@ -59,9 +87,12 @@ public interface ActivationCodeRepository extends JpaRepository<ActivationCode, 
     Page<ActivationCode> findByCodeContainingIgnoreCaseOrderByIdAsc(String keyword, Pageable pageable);
 
     /**
-     * 统计未使用的激活码数量
+     * 单次聚合统计（总数/已用数），替代三条 count 查询
      */
-    long countByUsedFalse();
+    @Query("SELECT COUNT(a.id) AS total, "
+            + "COALESCE(SUM(CASE WHEN a.used = true THEN 1 ELSE 0 END), 0) AS used "
+            + "FROM ActivationCode a")
+    StatsView fetchStats();
 
     /**
      * 按获取人分页查询激活码（按获取时间倒序）
@@ -76,10 +107,12 @@ public interface ActivationCodeRepository extends JpaRepository<ActivationCode, 
     int markUsedIn(@Param("ids") Collection<Long> ids, @Param("now") LocalDateTime now);
 
     /**
-     * 批量标记为未使用（单条 UPDATE ... WHERE id IN，事务内执行）
+     * 批量标记为未使用（单条 UPDATE ... WHERE id IN，事务内执行）。
+     * 与单条恢复口径一致：同时清除获取人/设备绑定，避免恢复后仍出现在"我的获取记录"、残留旧设备信息
      */
     @Modifying
-    @Query("UPDATE ActivationCode a SET a.used = false, a.fetchTime = null WHERE a.id IN :ids")
+    @Query("UPDATE ActivationCode a SET a.used = false, a.fetchTime = null, a.fetchUser = null, "
+            + "a.deviceId = null, a.bindTime = null WHERE a.id IN :ids")
     int markUnusedIn(@Param("ids") Collection<Long> ids);
 
     /**
@@ -90,12 +123,12 @@ public interface ActivationCodeRepository extends JpaRepository<ActivationCode, 
     int deleteIn(@Param("ids") Collection<Long> ids);
 
     /**
-     * 统计已使用的激活码数量
-     */
-    long countByUsedTrue();
-
-    /**
      * 按激活码代码模糊搜索
      */
     List<ActivationCode> findByCodeContainingIgnoreCaseOrderByCreateTimeDesc(String keyword);
+
+    /**
+     * 批量查询已存在的激活码记录（导入前去重）
+     */
+    List<ActivationCode> findByCodeIn(Collection<String> codes);
 }

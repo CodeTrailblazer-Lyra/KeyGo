@@ -1,6 +1,6 @@
 plugins {
     java
-    id("org.springframework.boot") version "4.1.0"
+    id("org.springframework.boot") version "4.1.1"
     id("io.spring.dependency-management") version "1.1.7"
 }
 
@@ -28,7 +28,9 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-webmvc")
     implementation("com.fasterxml.jackson.core:jackson-databind")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
-    implementation("org.apache.poi:poi-ooxml:5.4.0")
+    // Redis：热点只读查询缓存（统计/公告/单位），缓存放行失败时自动回源 PostgreSQL
+    implementation("org.springframework.boot:spring-boot-starter-data-redis")
+    implementation("org.apache.poi:poi-ooxml:5.5.1")
 
     compileOnly("org.projectlombok:lombok")
     annotationProcessor("org.projectlombok:lombok")
@@ -38,10 +40,13 @@ dependencies {
 
     // 统一测试套件，替代一堆零散test starter
     testImplementation("org.springframework.boot:spring-boot-starter-test")
+    // MockMvc / @AutoConfigureMockMvc（Boot 4 起位于 webmvc 专属测试 starter）
+    testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
     testImplementation("org.springframework.security:spring-security-test")
     testCompileOnly("org.projectlombok:lombok")
     testAnnotationProcessor("org.projectlombok:lombok")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    testRuntimeOnly("com.h2database:h2")
 }
 
 tasks.withType<Test> {

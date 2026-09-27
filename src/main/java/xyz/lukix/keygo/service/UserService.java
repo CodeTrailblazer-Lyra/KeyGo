@@ -29,12 +29,6 @@ public interface UserService {
     /** 获取当前登录用户信息 */
     Optional<SysUser> findByUsername(String username);
 
-    /** 判断是否为 SUPER_ADMIN */
-    boolean isSuperAdmin(String username);
-
-    /** 判断是否为 ADMIN 及以上 */
-    boolean isAdmin(String username);
-
     /**
      * 修改密码
      * @param targetUserId 目标用户ID（null 表示修改自己）

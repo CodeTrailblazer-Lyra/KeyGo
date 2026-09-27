@@ -1,10 +1,39 @@
 spring:
   profiles:
     active: dev
+  # 启动时自动执行幂等建表脚本：新库/老库都会补齐缺失的表与字段（脚本全部 IF NOT EXISTS，可重复执行）
+  sql:
+    init:
+      mode: always
+      schema-locations:
+        - classpath:sql/sys_user.sql
+        - classpath:sql/activation_code.sql
+        - classpath:sql/activation_log.sql
+        - classpath:sql/operation_log.sql
+        - classpath:sql/announcement.sql
+        - classpath:sql/unit.sql
+        - classpath:sql/persistent_logins.sql
   jpa:
     properties:
       hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
+        # JDBC 批量写入：Excel 批量导入时合并 INSERT，减少数据库往返
+        jdbc:
+          batch_size: 30
+        order_inserts: true
+        order_updates: true
+        query:
+          # Hibernate 默认缓存 2000 条解析后的查询计划（每条数十 KB，且永不主动过期），
+          # 本项目语句数量远小于此：调小上限回收常驻堆， accidental SQL 拼接膨胀时也有兜底
+          plan_cache_max_size: 256
+          plan_parameter_metadata_max_size: 32
     open-in-view: false
+  # Redis（热点读缓存）。短超时：Redis 不可达时快速失败并由 RedisJsonCache 回源 PG
+  data:
+    redis:
+      host: ${KEYGO_REDIS_HOST:localhost}
+      port: ${KEYGO_REDIS_PORT:6379}
+      password: ${KEYGO_REDIS_PASSWORD:}
+      timeout: 1s
+      connect-timeout: 1s
 server:
   port: 18080

@@ -2,7 +2,9 @@ package xyz.lukix.keygo.controller;
 
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.poi.ss.usermodel.DataFormatter;
+import org.apache.poi.xssf.streaming.SXSSFWorkbook;
 import org.springframework.data.domain.Page;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -11,19 +13,24 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import xyz.lukix.keygo.common.ApiResponse;
 import xyz.lukix.keygo.dto.BatchIdsRequest;
+import xyz.lukix.keygo.dto.ExportRequest;
 import xyz.lukix.keygo.entity.ActivationCode;
+import xyz.lukix.keygo.entity.ActivationLog;
 import xyz.lukix.keygo.entity.OperationLog;
 import xyz.lukix.keygo.service.ActivationCodeService;
+import xyz.lukix.keygo.service.ActivationLogService;
 import xyz.lukix.keygo.service.OperationLogService;
 
 import java.io.OutputStream;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
 import java.util.*;
 
 /**
  * 激活码管理接口（仅管理员可用）
  */
+@Slf4j
 @RestController
 @RequestMapping("/api/v1/admin/codes")
 @RequiredArgsConstructor
@@ -31,8 +38,13 @@ public class AdminCodesController {
 
     /** 单次批量操作允许的 id 数量上限 */
     private static final int MAX_BATCH_SIZE = 100;
+    /** 单次 Excel 导入允许的最大行数（防超大文件拖垮内存/事务） */
+    private static final int MAX_IMPORT_ROWS = 5000;
+    /** SXSSFWorkbook 滑动窗口大小：内存中保留的行数 */
+    private static final int SXSS_WINDOW_SIZE = 100;
 
     private final ActivationCodeService activationCodeService;
+    private final ActivationLogService activationLogService;
     private final OperationLogService operationLogService;
 
     /** 激活码列表（分页） */
@@ -42,11 +54,12 @@ public class AdminCodesController {
                                                  @RequestParam(defaultValue = "1") int page,
                                                  @RequestParam(defaultValue = "20") int size) {
         Page<ActivationCode> pageResult = activationCodeService.pageQuery(status, keyword, page, size);
+        ActivationCodeService.Stats stats = activationCodeService.getStats();
         Map<String, Object> result = new HashMap<>();
         result.put("codes", pageResult.getContent());
-        result.put("total", activationCodeService.countTotal());
-        result.put("available", activationCodeService.countAvailable());
-        result.put("used", activationCodeService.countUsed());
+        result.put("total", stats.total());
+        result.put("available", stats.available());
+        result.put("used", stats.used());
         result.put("page", pageResult.getNumber() + 1);
         result.put("size", pageResult.getSize());
         result.put("totalPages", pageResult.getTotalPages());
@@ -57,18 +70,22 @@ public class AdminCodesController {
     /** 标记激活码为已使用 */
     @PatchMapping("/{id}/use")
     public ApiResponse<Void> markAsUsed(@PathVariable Long id, @AuthenticationPrincipal UserDetails user) {
+        if (!activationCodeService.markAsUsed(id)) {
+            return ApiResponse.error(404, "激活码不存在");
+        }
         String username = user != null ? user.getUsername() : null;
-        activationCodeService.markAsUsed(id);
         activationCodeService.findById(id).ifPresent(c ->
                 operationLogService.record(username, "MARK_USED", c.getCode(), null));
         return ApiResponse.ok("激活码已标记为已使用", null);
     }
 
-    /** 标记激活码为未使用（仅超级管理员） */
+    /** 标记激活码为未使用（恢复，同时清除领取人与设备绑定；仅超级管理员） */
     @PatchMapping("/{id}/unuse")
     public ApiResponse<Void> markAsUnused(@PathVariable Long id, @AuthenticationPrincipal UserDetails user) {
+        if (!activationCodeService.markAsUnused(id)) {
+            return ApiResponse.error(404, "激活码不存在");
+        }
         String username = user != null ? user.getUsername() : null;
-        activationCodeService.markAsUnused(id);
         activationCodeService.findById(id).ifPresent(c ->
                 operationLogService.record(username, "MARK_UNUSED", c.getCode(), null));
         return ApiResponse.ok("激活码已标记为未使用", null);
@@ -78,7 +95,9 @@ public class AdminCodesController {
     @PatchMapping("/{id}/remark")
     public ApiResponse<Void> updateRemark(@PathVariable Long id, @RequestBody Map<String, String> body) {
         String remark = body.getOrDefault("remark", "");
-        if (remark.length() > 200) remark = remark.substring(0, 200);
+        if (remark.length() > ActivationCode.MAX_REMARK_LENGTH) {
+            remark = remark.substring(0, ActivationCode.MAX_REMARK_LENGTH);
+        }
         activationCodeService.updateRemark(id, remark.isBlank() ? null : remark);
         return ApiResponse.ok("备注已更新", null);
     }
@@ -88,41 +107,52 @@ public class AdminCodesController {
     public ApiResponse<Map<String, Object>> importExcel(@RequestParam("file") MultipartFile file,
                                                         @AuthenticationPrincipal UserDetails user) {
         String username = user != null ? user.getUsername() : null;
-        try {
-            List<String[]> rows = new ArrayList<>();
-            try (var is = file.getInputStream();
-                 var workbook = org.apache.poi.ss.usermodel.WorkbookFactory.create(is)) {
-                var sheet = workbook.getSheetAt(0);
-                int lastRowNum = sheet.getLastRowNum();
-                for (int i = 0; i <= lastRowNum; i++) {
-                    var row = sheet.getRow(i);
-                    if (row == null) continue;
-                    var cell = row.getCell(0);
-                    if (cell != null) {
-                        String val = cell.getStringCellValue();
-                        if (val != null && !val.isBlank()) {
-                            String remark = null;
-                            var remarkCell = row.getCell(1);
-                            if (remarkCell != null) {
-                                String rv = remarkCell.getStringCellValue();
-                                if (rv != null && !rv.isBlank()) remark = rv.trim();
-                            }
-                            rows.add(new String[]{val.trim(), remark});
+        if (file == null || file.isEmpty()) {
+            return ApiResponse.error(400, "请选择非空的 Excel 文件");
+        }
+        List<String[]> rows = new ArrayList<>();
+        try (var is = file.getInputStream();
+             var workbook = org.apache.poi.ss.usermodel.WorkbookFactory.create(is)) {
+            // DataFormatter 按单元格展示值读取，避免数字型激活码单元格 getStringCellValue 直接抛异常
+            DataFormatter formatter = new DataFormatter();
+            var sheet = workbook.getSheetAt(0);
+            int lastRowNum = sheet.getLastRowNum();
+            for (int i = 0; i <= lastRowNum; i++) {
+                var row = sheet.getRow(i);
+                if (row == null) continue;
+                var cell = row.getCell(0);
+                if (cell != null) {
+                    String val = formatter.formatCellValue(cell);
+                    if (val != null && !val.isBlank()) {
+                        String remark = null;
+                        var remarkCell = row.getCell(1);
+                        if (remarkCell != null) {
+                            String rv = formatter.formatCellValue(remarkCell);
+                            if (rv != null && !rv.isBlank()) remark = rv.trim();
+                        }
+                        rows.add(new String[]{val.trim(), remark});
+                        if (rows.size() > MAX_IMPORT_ROWS) {
+                            return ApiResponse.error(400, "单次导入最多 " + MAX_IMPORT_ROWS + " 行，请拆分文件");
                         }
                     }
                 }
             }
-            int count = activationCodeService.batchImportCodes(rows);
-            operationLogService.record(username, "IMPORT", null, "导入 " + count + " 个激活码");
-            Map<String, Object> result = new HashMap<>();
-            result.put("count", count);
-            result.put("total", activationCodeService.countTotal());
-            result.put("available", activationCodeService.countAvailable());
-            result.put("used", activationCodeService.countUsed());
-            return ApiResponse.ok(result);
         } catch (Exception e) {
-            return ApiResponse.error(500, "导入失败: " + e.getMessage());
+            // 不回传原始异常消息，避免泄露服务器内部信息
+            log.error("Excel 导入解析失败，操作者={}", username, e);
+            return ApiResponse.error(500, "导入失败，请检查文件格式后重试");
         }
+        // 去重（文件内重复/库内已存在）在服务层处理，重复项跳过而非整单失败
+        ActivationCodeService.ImportResult importResult = activationCodeService.batchImportCodes(rows);
+        operationLogService.record(username, "IMPORT", null, "导入 " + importResult.imported() + " 个激活码");
+        ActivationCodeService.Stats stats = activationCodeService.getStats();
+        Map<String, Object> result = new HashMap<>();
+        result.put("count", importResult.imported());
+        result.put("skipped", importResult.skipped());
+        result.put("total", stats.total());
+        result.put("available", stats.available());
+        result.put("used", stats.used());
+        return ApiResponse.ok(result);
     }
 
     /**
@@ -130,10 +160,10 @@ public class AdminCodesController {
      * body: {"status": "used|unused", "keyword": "xxx"}，两者均可省略
      */
     @PostMapping("/export")
-    public void export(@RequestBody(required = false) Map<String, String> body,
+    public void export(@RequestBody(required = false) ExportRequest body,
                        HttpServletResponse response) {
-        String status = body != null ? body.get("status") : null;
-        String keyword = body != null ? body.get("keyword") : null;
+        String status = body != null ? body.status() : null;
+        String keyword = body != null ? body.keyword() : null;
 
         List<ActivationCode> codes;
         if (keyword != null && !keyword.isBlank()) {
@@ -146,7 +176,8 @@ public class AdminCodesController {
             codes = activationCodeService.listAll();
         }
 
-        try (var workbook = new XSSFWorkbook()) {
+        // SXSSF 流式写出（内存仅保留滑动窗口行），避免大表导出时全量 DOM 驻留内存
+        try (var workbook = new SXSSFWorkbook(SXSS_WINDOW_SIZE)) {
             var sheet = workbook.createSheet("激活码");
             var header = sheet.createRow(0);
             header.createCell(0).setCellValue("#");
@@ -174,7 +205,8 @@ public class AdminCodesController {
                 workbook.write(out);
             }
         } catch (Exception e) {
-            // 写入失败时响应已部分发送，无法恢复
+            // 写入失败时响应可能已部分发送，无法再返回错误体，仅记录日志供排查
+            log.error("激活码导出失败", e);
         }
     }
 
@@ -189,11 +221,12 @@ public class AdminCodesController {
         String username = user != null ? user.getUsername() : null;
         int count = activationCodeService.batchMarkAsUsed(check.data());
         operationLogService.record(username, "BATCH_MARK_USED", null, "批量标记 " + count + " 个");
+        ActivationCodeService.Stats stats = activationCodeService.getStats();
         Map<String, Object> result = new HashMap<>();
         result.put("count", count);
-        result.put("total", activationCodeService.countTotal());
-        result.put("available", activationCodeService.countAvailable());
-        result.put("used", activationCodeService.countUsed());
+        result.put("total", stats.total());
+        result.put("available", stats.available());
+        result.put("used", stats.used());
         return ApiResponse.ok(result);
     }
 
@@ -208,11 +241,12 @@ public class AdminCodesController {
         String username = user != null ? user.getUsername() : null;
         int count = activationCodeService.batchMarkAsUnused(check.data());
         operationLogService.record(username, "BATCH_MARK_UNUSED", null, "批量恢复 " + count + " 个");
+        ActivationCodeService.Stats stats = activationCodeService.getStats();
         Map<String, Object> result = new HashMap<>();
         result.put("count", count);
-        result.put("total", activationCodeService.countTotal());
-        result.put("available", activationCodeService.countAvailable());
-        result.put("used", activationCodeService.countUsed());
+        result.put("total", stats.total());
+        result.put("available", stats.available());
+        result.put("used", stats.used());
         return ApiResponse.ok(result);
     }
 
@@ -235,9 +269,12 @@ public class AdminCodesController {
     /** 删除激活码（仅超级管理员） */
     @DeleteMapping("/{id}")
     public ApiResponse<Void> deleteCode(@PathVariable Long id, @AuthenticationPrincipal UserDetails user) {
+        Optional<ActivationCode> found = activationCodeService.findById(id);
+        if (found.isEmpty()) {
+            return ApiResponse.error(404, "激活码不存在");
+        }
         String username = user != null ? user.getUsername() : null;
-        activationCodeService.findById(id).ifPresent(c ->
-                operationLogService.record(username, "DELETE", c.getCode(), null));
+        operationLogService.record(username, "DELETE", found.get().getCode(), null);
         activationCodeService.deleteCode(id);
         return ApiResponse.ok("激活码已删除", null);
     }
@@ -254,6 +291,25 @@ public class AdminCodesController {
         result.put("totalPages", logs.getTotalPages());
         result.put("totalElements", logs.getTotalElements());
         return ApiResponse.ok(result);
+    }
+
+    /**
+     * 查询核销审计日志（分页，时间倒序，仅管理员）：
+     * result 可选过滤（SUCCESS/INVALID/ALREADY_USED/EXPIRED）；仅返回哈希，不含明文
+     */
+    @GetMapping("/redeem-logs")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+    public ApiResponse<Map<String, Object>> redeemLogs(@RequestParam(defaultValue = "1") int page,
+                                                       @RequestParam(defaultValue = "20") int size,
+                                                       @RequestParam(required = false) String result) {
+        Page<ActivationLog> logs = activationLogService.pageLogs(page, size, result);
+        Map<String, Object> data = new HashMap<>();
+        data.put("logs", logs.getContent());
+        data.put("page", logs.getNumber() + 1);
+        data.put("size", logs.getSize());
+        data.put("totalPages", logs.getTotalPages());
+        data.put("totalElements", logs.getTotalElements());
+        return ApiResponse.ok(data);
     }
 
     /**
