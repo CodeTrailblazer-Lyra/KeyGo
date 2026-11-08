@@ -34,11 +34,19 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-security")
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.springframework.boot:spring-boot-starter-webmvc")
-    implementation("com.fasterxml.jackson.core:jackson-databind")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     // Redis：热点只读查询缓存（统计/公告/单位），缓存放行失败时自动回源 PostgreSQL
     implementation("org.springframework.boot:spring-boot-starter-data-redis")
     implementation("org.apache.poi:poi-ooxml:5.5.1")
+
+    // --- 显式声明关键传递依赖，确保 Dependabot 安全更新能正确识别 ---
+    // Jackson 2.x 核心（jackson-databind 的传递依赖）CVE-2026-110879 / CVE-2026-91777
+    implementation("com.fasterxml.jackson.core:jackson-core")
+    implementation("com.fasterxml.jackson.core:jackson-databind")
+    // Tomcat Embed Core（spring-boot-starter-webmvc 的传递依赖） CVE-2026-101296
+    implementation("org.apache.tomcat.embed:tomcat-embed-core")
+    // Commons Lang 3（poi-ooxml 的传递依赖） CVE-2025-xxxx（通过 eachDependency 统一管理版本）
+    implementation("org.apache.commons:commons-lang3")
 
     compileOnly("org.projectlombok:lombok")
     annotationProcessor("org.projectlombok:lombok")
