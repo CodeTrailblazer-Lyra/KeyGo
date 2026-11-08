@@ -36,6 +36,6 @@ public class OperationLogService {
     @Transactional(readOnly = true)
     public Page<OperationLog> pageLogs(int page, int size) {
         return operationLogRepository.findAllByOrderByCreateTimeDesc(
-                PageRequest.of(Math.max(page - 1, 0), Math.min(Math.max(size, 1), 100)));
+                PageRequest.of(Math.max(page - 1, 0), Math.clamp(size, 1, 100)));
     }
 }

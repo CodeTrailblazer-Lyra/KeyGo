@@ -1,47 +1,97 @@
+# =============================================================================
+# KeyGo 生产环境配置（profile: prod）
+# 所有基础设施信息通过环境变量 / 启动参数注入，仓库中不保留任何连接默认值
+#
+# 必选环境变量：
+#   DB_HOST              数据库主机地址
+#   DB_PORT              数据库端口
+#   DB_NAME              数据库名称
+#   DB_USERNAME           数据库用户名
+#   DB_PASSWORD           数据库密码
+#   REDIS_HOST            Redis 主机地址
+#   REDIS_PORT            Redis 端口
+#   REDIS_PASSWORD        Redis 密码
+#   KEYGO_REMEMBER_ME_KEY Remember-Me Cookie 签名密钥（建议 ≥32 字符随机串）
+#
+# 可选环境变量（带默认值，通常无需调整）：
+#   KEYGO_CORS_ALLOWED_ORIGINS   CORS 允许来源（代码默认 http://localhost:5173）
+#   HIKARI_MAX_POOL_SIZE         连接池最大连接数（默认 20）
+#   HIKARI_MIN_IDLE              连接池最小空闲连接（默认 10）
+#   LOG_FILE                     日志文件路径（默认 /var/log/keygo/app.log）
+#   LOG_MAX_SIZE                 单个日志文件最大体积（默认 100MB）
+#   LOG_MAX_HISTORY              日志保留天数（默认 30）
+#   LOG_TOTAL_SIZE_CAP           日志总磁盘上限（默认 10GB）
+#   KEYGO_LICENSE_CHECK_ENABLED  启动时自动验证开关（默认 true；false=启动不验证，手动接口仍可用）
+#   KEYGO_LICENSE_INTERVAL_MS    官方接口相邻请求间隔毫秒（默认 300）
+# =============================================================================
+
 spring:
   config:
     activate:
       on-profile: prod
+
+  # ---------------------------------------------------------------------------
+  # 数据源：PostgreSQL（全部由环境变量拼接 JDBC URL，无默认值）
+  # ---------------------------------------------------------------------------
   datasource:
-    url: jdbc:postgresql://172.18.0.100:5432/KeyGo
-    username: KeyGo
-    # 密码仅由环境变量注入，不再在仓库中保留默认值；旧默认密码已泄露进 Git 历史，应尽快在数据库侧轮换
+    url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
+    username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
     hikari:
-      maximum-pool-size: 20
-      minimum-idle: 10
+      maximum-pool-size: ${HIKARI_MAX_POOL_SIZE:20}
+      minimum-idle: ${HIKARI_MIN_IDLE:10}
       connection-timeout: 30000
       idle-timeout: 600000
       max-lifetime: 1800000
-  servlet:
-    # 限制上传体积，防止超大 Excel 文件打满内存
-    multipart:
-      max-file-size: 10MB
-      max-request-size: 12MB
+
+  # ---------------------------------------------------------------------------
+  # Redis（全部由环境变量注入，无默认值）
+  # ---------------------------------------------------------------------------
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
+      password: ${REDIS_PASSWORD}
+      timeout: 1s
+      connect-timeout: 1s
+
+  # ---------------------------------------------------------------------------
+  # JPA：生产环境禁止自动 DDL，仅做 Schema 校验
+  # ---------------------------------------------------------------------------
   jpa:
     hibernate:
       ddl-auto: validate
     show-sql: false
 
-# Remember-Me 签名密钥：必须由环境变量 KEYGO_REMEMBER_ME_KEY 注入随机长字符串；
-# 不提供默认值——缺失时启动直接失败（fail-fast），避免使用仓库中已知的弱密钥签发 Cookie
+# ---------------------------------------------------------------------------
+# 安全
+# ---------------------------------------------------------------------------
 keygo:
   security:
     remember-me-key: ${KEYGO_REMEMBER_ME_KEY}
 
+# ---------------------------------------------------------------------------
+# 官方激活码联网验证（开关/频率可按需调整，接口地址沿用公共配置）
+# ---------------------------------------------------------------------------
+  license:
+    enabled: ${KEYGO_LICENSE_CHECK_ENABLED:true}
+    interval-ms: ${KEYGO_LICENSE_INTERVAL_MS:300}
+
+# ---------------------------------------------------------------------------
+# 日志：生产环境精简输出 + 文件滚动
+# ---------------------------------------------------------------------------
 logging:
   level:
     root: INFO
     org.springframework: WARN
-    # 显式配置了 DaoAuthenticationProvider 后 UserDetailsService 不再参与自动装配，属预期行为
     org.springframework.security.config.annotation.authentication.configuration: ERROR
     org.hibernate: WARN
     xyz.lukix.keygo: INFO
   file:
-    name: /var/log/yourapp/app.log
+    name: ${LOG_FILE:/var/log/keygo/app.log}
   logback:
     rollingpolicy:
-      max-file-size: 100MB
-      max-history: 30
-      total-size-cap: 10GB
+      max-file-size: ${LOG_MAX_SIZE:100MB}
+      max-history: ${LOG_MAX_HISTORY:30}
+      total-size-cap: ${LOG_TOTAL_SIZE_CAP:10GB}

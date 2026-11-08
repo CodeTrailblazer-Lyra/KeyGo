@@ -28,9 +28,9 @@ public class ActivationLogService {
 
     /** result 取值：SUCCESS/INVALID/ALREADY_USED/EXPIRED */
     @Async("auditExecutor")
-    public void recordRedeem(String codeHash, String deviceId, String ip, String result) {
+    public void recordRedeem(String code, String deviceId, String ip, String result) {
         ActivationLog entry = new ActivationLog();
-        entry.setCodeHash(codeHash);
+        entry.setCode(code);
         entry.setDeviceId(deviceId);
         entry.setIp(ip);
         entry.setResult(result);
@@ -42,7 +42,7 @@ public class ActivationLogService {
      */
     @Transactional(readOnly = true)
     public Page<ActivationLog> pageLogs(int page, int size, String result) {
-        Pageable pageable = PageRequest.of(Math.max(page - 1, 0), Math.min(Math.max(size, 1), 100));
+        Pageable pageable = PageRequest.of(Math.max(page - 1, 0), Math.clamp(size, 1, 100));
         if (result != null && VALID_RESULTS.contains(result.toUpperCase(Locale.ROOT))) {
             return activationLogRepository.findByResultOrderByCreateTimeDesc(result.toUpperCase(Locale.ROOT), pageable);
         }

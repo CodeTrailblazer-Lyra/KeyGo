@@ -1,7 +1,15 @@
+# =============================================================================
+# KeyGo 公共配置（所有 profile 共享）
+# =============================================================================
+
 spring:
   profiles:
     active: dev
-  # 启动时自动执行幂等建表脚本：新库/老库都会补齐缺失的表与字段（脚本全部 IF NOT EXISTS，可重复执行）
+
+  # ---------------------------------------------------------------------------
+  # 数据源初始化：启动时自动执行幂等建表脚本
+  # 全部 IF NOT EXISTS，可重复执行；新库补齐缺失表，老库跳过已存在表
+  # ---------------------------------------------------------------------------
   sql:
     init:
       mode: always
@@ -13,7 +21,12 @@ spring:
         - classpath:sql/announcement.sql
         - classpath:sql/unit.sql
         - classpath:sql/persistent_logins.sql
+
+  # ---------------------------------------------------------------------------
+  # JPA / Hibernate 公共配置
+  # ---------------------------------------------------------------------------
   jpa:
+    open-in-view: false
     properties:
       hibernate:
         # JDBC 批量写入：Excel 批量导入时合并 INSERT，减少数据库往返
@@ -22,18 +35,32 @@ spring:
         order_inserts: true
         order_updates: true
         query:
-          # Hibernate 默认缓存 2000 条解析后的查询计划（每条数十 KB，且永不主动过期），
-          # 本项目语句数量远小于此：调小上限回收常驻堆， accidental SQL 拼接膨胀时也有兜底
+          # 查询计划缓存上限（默认 2000，本项目语句数远小于此，调小回收常驻堆）
           plan_cache_max_size: 256
           plan_parameter_metadata_max_size: 32
-    open-in-view: false
-  # Redis（热点读缓存）。短超时：Redis 不可达时快速失败并由 RedisJsonCache 回源 PG
-  data:
-    redis:
-      host: ${KEYGO_REDIS_HOST:localhost}
-      port: ${KEYGO_REDIS_PORT:6379}
-      password: ${KEYGO_REDIS_PASSWORD:}
-      timeout: 1s
-      connect-timeout: 1s
+
+# ---------------------------------------------------------------------------
+# 服务器
+# ---------------------------------------------------------------------------
 server:
   port: 18080
+  servlet:
+    multipart:
+      max-file-size: 10MB       # 单个上传文件体积上限（Excel 导入）
+      max-request-size: 12MB    # 单次请求总体积上限
+
+# ---------------------------------------------------------------------------
+# 业务自定义配置（各 profile 可按需覆盖）
+# ---------------------------------------------------------------------------
+keygo:
+  cache:
+    enabled: true                            # Redis 缓存总开关（测试环境可关闭）
+
+  # ---------------------------------------------------------------------------
+  # 官方激活码联网验证（统信 UOS licensequery）
+  # ---------------------------------------------------------------------------
+  license:
+    enabled: false                                                        # 启动时自动验证开关（false=启动不验证，但手动接口仍可用）
+    url: https://license.chinauos.com/v1/openapi/legalquery              # 官方授权查询接口
+    interval-ms: 300                                                     # 相邻两码请求间隔，防被官方限流
+    timeout-seconds: 10                                                  # 单次请求连接/读取超时

@@ -36,7 +36,7 @@ public class UnitService {
     @Transactional(readOnly = true)
     public List<Unit> listAll() {
         return redisJsonCache.getOrLoad(LIST_CACHE_KEY, LIST_CACHE_TTL, LIST_CACHE_TYPE,
-                () -> unitRepository.findAllByOrderByIdAsc());
+                unitRepository::findAllByOrderByIdAsc);
     }
 
     /**

@@ -29,8 +29,6 @@ public class SysUser {
     @Column(columnDefinition = "boolean default false")
     private Boolean approved = false;
 
-    private Boolean enabled = true;
-
     @CreationTimestamp
     private LocalDateTime createTime;
 

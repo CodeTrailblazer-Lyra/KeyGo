@@ -9,7 +9,7 @@ import java.util.Optional;
 public interface UserService {
 
     /** 注册新用户（默认 role=USER, approved=false） */
-    SysUser register(String username, String password);
+    void register(String username, String password);
 
     /** 审核通过用户 */
     void approveUser(Long userId);

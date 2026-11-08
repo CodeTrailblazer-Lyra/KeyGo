@@ -20,7 +20,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional
-    public SysUser register(String username, String password) {
+    public void register(String username, String password) {
         if (sysUserRepository.existsByUsername(username)) {
             throw new IllegalArgumentException("用户名已存在");
         }
@@ -29,8 +29,7 @@ public class UserServiceImpl implements UserService {
         user.setPassword(passwordEncoder.encode(password));
         user.setRole(Role.ROLE_USER);
         user.setApproved(false);
-        user.setEnabled(true);
-        return sysUserRepository.save(user);
+        sysUserRepository.save(user);
     }
 
     @Override
@@ -48,7 +47,6 @@ public class UserServiceImpl implements UserService {
         SysUser u = sysUserRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("用户不存在"));
         u.setApproved(false);
-        u.setEnabled(false);
         sysUserRepository.save(u);
     }
 
@@ -127,7 +125,7 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional(readOnly = true)
     public List<SysUser> listPendingUsers() {
-        return sysUserRepository.findByApprovedFalseAndEnabledTrueAndRoleOrderByCreateTimeDesc(Role.ROLE_USER);
+        return sysUserRepository.findByApprovedFalseAndRoleOrderByCreateTimeDesc(Role.ROLE_USER);
     }
 
     @Override

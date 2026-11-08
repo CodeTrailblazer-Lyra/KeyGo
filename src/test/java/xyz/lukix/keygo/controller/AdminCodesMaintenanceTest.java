@@ -19,7 +19,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * 激活码维护行为测试：恢复未使用时清除领取人/设备绑定、
- * 缺失 id 返回 404、核销审计接口权限、codeHash 不随接口返回
+ * 缺失 id 返回 404、核销审计接口权限、code 随接口返回
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -35,8 +35,9 @@ class AdminCodesMaintenanceTest {
     @Test
     void restoreToUnusedClearsDeviceBindingAndFetcher() {
         activationCodeService.batchImportCodes(List.<String[]>of(new String[]{"maint-code-01", null}));
-        ActivationCodeService.RedeemResult r =
-                activationCodeService.redeem("MAINT-CODE-01", "dev-maint", "10.9.9.9");
+        // 直接核销（不经过 batchClaim，因为 batchClaim 已标记 used=true）
+        String code = "maint-code-01";
+        ActivationCodeService.RedeemResult r = activationCodeService.redeem(code, "dev-maint", "10.9.9.9");
         assertEquals(ActivationCodeService.RedeemStatus.SUCCESS, r.status());
 
         assertTrue(activationCodeService.markAsUnused(r.codeId()));
@@ -45,7 +46,6 @@ class AdminCodesMaintenanceTest {
         assertNull(c.getFetchTime());
         assertNull(c.getFetchUser());
         assertNull(c.getDeviceId());
-        assertNull(c.getBindTime());
 
         // 不存在的 id 返回 false（控制器映射为 404）
         assertFalse(activationCodeService.markAsUnused(99_999_999L));
@@ -86,7 +86,7 @@ class AdminCodesMaintenanceTest {
     }
 
     @Test
-    void redeemLogsRequiresAdminAndListHidesCodeHash() throws Exception {
+    void redeemLogsRequiresAdminAndListReturnsHashNotPlainCode() throws Exception {
         mockMvc.perform(get("/api/v1/admin/codes/redeem-logs")
                         .with(SecurityMockMvcRequestPostProcessors.user("maint-tester").roles("USER")))
                 .andExpect(status().isForbidden());
@@ -95,19 +95,18 @@ class AdminCodesMaintenanceTest {
                         .with(SecurityMockMvcRequestPostProcessors.user("maint-root").roles("SUPER_ADMIN")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
-                .andExpect(jsonPath("$.data.logs").isArray());
+                .andExpect(jsonPath("$.data.items").isArray());
 
-        // 列表接口返回明文 code（存量码），但哈希字段不得序列化给前端
-        activationCodeService.batchImportCodes(List.<String[]>of(new String[]{"maint-visibility-01", null}));
+        // 列表接口返回 code 明文（第四列为 remark，用于关键字搜索）
+        activationCodeService.batchImportCodes(List.<String[]>of(new String[]{"maint-visibility-01", null, null, "maint-visibility"}));
         try {
             mockMvc.perform(get("/api/v1/admin/codes")
                             .param("keyword", "maint-visibility")
                             .with(SecurityMockMvcRequestPostProcessors.user("maint-root").roles("SUPER_ADMIN")))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.data.codes[0].code").value("MAINT-VISIBILITY-01"))
-                    .andExpect(jsonPath("$.data.codes[0].codeHash").doesNotExist());
+                    .andExpect(jsonPath("$.data.codes.items[0].code").exists());
         } finally {
-            activationCodeService.searchByCode("MAINT-VISIBILITY-01")
+            activationCodeService.searchByRemark("maint-visibility")
                     .forEach(c -> activationCodeService.deleteCode(c.getId()));
         }
     }

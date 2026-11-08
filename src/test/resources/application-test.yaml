@@ -18,8 +18,11 @@ spring:
       mode: never
 
 # 测试环境不依赖本地 Redis：缓存组件旁路（RedisJsonCache 直接回源）
+# 官方联网验证关闭：启动时不同步、不发真实 HTTP 请求
 keygo:
   cache:
+    enabled: false
+  license:
     enabled: false
 
 logging:

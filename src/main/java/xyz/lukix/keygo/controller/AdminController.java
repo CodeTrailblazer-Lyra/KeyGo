@@ -7,12 +7,16 @@ import org.springframework.web.bind.annotation.*;
 import xyz.lukix.keygo.common.ApiResponse;
 import xyz.lukix.keygo.dto.PasswordChangeRequest;
 import xyz.lukix.keygo.dto.RoleChangeRequest;
+import xyz.lukix.keygo.dto.UserResponse;
 import xyz.lukix.keygo.entity.Role;
 import xyz.lukix.keygo.entity.SysUser;
 import xyz.lukix.keygo.service.UserService;
 
-import java.util.*;
+import java.util.List;
 
+/**
+ * 用户管理接口（管理员可用）
+ */
 @RestController
 @RequestMapping("/api/v1/admin/users")
 @RequiredArgsConstructor
@@ -20,96 +24,75 @@ public class AdminController {
 
     private final UserService userService;
 
-    /** 获取当前用户信息 */
+    /**
+     * 获取当前用户信息
+     */
     @GetMapping("/me")
-    public ApiResponse<Map<String, Object>> me(Authentication auth) {
-        Map<String, Object> result = new HashMap<>();
-        result.put("username", auth.getName());
-        userService.findByUsername(auth.getName()).ifPresent(u -> {
-            result.put("role", u.getRole().name());
-            result.put("approved", u.getApproved());
-        });
-        return ApiResponse.ok(result);
+    public ApiResponse<UserResponse> me(Authentication auth) {
+        String username = auth.getName();
+        SysUser user = userService.findByUsername(username)
+                .orElseThrow(() -> new IllegalArgumentException("用户不存在"));
+        return ApiResponse.ok(UserResponse.of(username, user.getRole().name(), user.getApproved()));
     }
 
-    /** 获取用户列表（仅返回同级及以下角色，不暴露更高等级账户） */
+    /**
+     * 获取用户列表（仅返回同级及以下角色，不暴露更高等级账户）
+     */
     @GetMapping
-    public ApiResponse<List<Map<String, Object>>> listUsers(Authentication auth) {
-        List<Map<String, Object>> list = new ArrayList<>();
-        for (SysUser u : userService.listVisibleUsers(auth.getName())) {
-            Map<String, Object> m = new HashMap<>();
-            m.put("id", u.getId());
-            m.put("username", u.getUsername());
-            m.put("role", u.getRole().name());
-            m.put("approved", u.getApproved());
-            m.put("enabled", u.getEnabled());
-            m.put("createTime", u.getCreateTime() != null ? u.getCreateTime().toString() : "");
-            list.add(m);
-        }
-        return ApiResponse.ok(list);
+    public ApiResponse<List<UserResponse>> listUsers(Authentication auth) {
+        List<UserResponse> users = userService.listVisibleUsers(auth.getName())
+                .stream()
+                .map(this::toUserResponse)
+                .toList();
+        return ApiResponse.ok(users);
     }
 
-    /** 待审核用户列表 */
+    /**
+     * 待审核用户列表
+     */
     @GetMapping("/pending")
-    public ApiResponse<List<Map<String, Object>>> pendingUsers() {
-        List<Map<String, Object>> list = new ArrayList<>();
-        for (SysUser u : userService.listPendingUsers()) {
-            Map<String, Object> m = new HashMap<>();
-            m.put("id", u.getId());
-            m.put("username", u.getUsername());
-            m.put("createTime", u.getCreateTime() != null ? u.getCreateTime().toString() : "");
-            list.add(m);
-        }
-        return ApiResponse.ok(list);
+    public ApiResponse<List<UserResponse>> pendingUsers() {
+        List<UserResponse> users = userService.listPendingUsers()
+                .stream()
+                .map(this::toUserResponse)
+                .toList();
+        return ApiResponse.ok(users);
     }
 
-    /** 审核通过 */
+    /**
+     * 审核通过
+     */
     @PatchMapping("/{id}/approve")
     public ApiResponse<Void> approve(@PathVariable Long id) {
-        try {
-            userService.approveUser(id);
-            return ApiResponse.ok("审核通过", null);
-        } catch (IllegalArgumentException e) {
-            return ApiResponse.error(404, e.getMessage());
-        }
+        userService.approveUser(id);
+        return ApiResponse.ok("审核通过", null);
     }
 
-    /** 拒绝用户 */
+    /**
+     * 拒绝用户
+     */
     @PatchMapping("/{id}/reject")
     public ApiResponse<Void> reject(@PathVariable Long id) {
-        try {
-            userService.rejectUser(id);
-            return ApiResponse.ok("已拒绝该用户", null);
-        } catch (IllegalArgumentException e) {
-            return ApiResponse.error(404, e.getMessage());
-        }
+        userService.rejectUser(id);
+        return ApiResponse.ok("已拒绝该用户", null);
     }
 
-    /** 超级管理员删除用户 */
+    /**
+     * 超级管理员删除用户
+     */
     @DeleteMapping("/{id}")
     public ApiResponse<Void> deleteUser(@PathVariable Long id, Authentication auth) {
-        try {
-            userService.deleteUser(id, auth.getName());
-            return ApiResponse.ok("用户已删除", null);
-        } catch (SecurityException e) {
-            return ApiResponse.error(403, e.getMessage());
-        } catch (IllegalArgumentException e) {
-            return ApiResponse.error(400, e.getMessage());
-        }
+        userService.deleteUser(id, auth.getName());
+        return ApiResponse.ok("用户已删除", null);
     }
 
-    /** 修改密码（JSON body） */
+    /**
+     * 修改密码（JSON body）
+     */
     @PatchMapping("/password")
-    public ApiResponse<Void> changePassword(@RequestBody PasswordChangeRequest body,
-                                            Authentication auth) {
-        try {
-            userService.changePassword(body.userId(), body.oldPassword(), body.newPassword(), auth.getName());
-            return ApiResponse.ok("密码修改成功", null);
-        } catch (SecurityException e) {
-            return ApiResponse.error(403, e.getMessage());
-        } catch (IllegalArgumentException e) {
-            return ApiResponse.error(400, e.getMessage());
-        }
+    public ApiResponse<Void> changePassword(@RequestBody PasswordChangeRequest body, Authentication auth) {
+        userService.changePassword(body.userId(), body.oldPassword(), body.newPassword(), auth.getName());
+        return ApiResponse.ok("密码修改成功", null);
     }
 
     /**
@@ -128,13 +111,23 @@ public class AdminController {
         } catch (IllegalArgumentException e) {
             return ApiResponse.error(400, "无效的角色: " + roleStr);
         }
-        try {
-            userService.changeRole(id, newRole, auth.getName());
-            return ApiResponse.ok("角色已更新为 " + newRole.name(), null);
-        } catch (SecurityException e) {
-            return ApiResponse.error(403, e.getMessage());
-        } catch (IllegalArgumentException e) {
-            return ApiResponse.error(400, e.getMessage());
-        }
+        userService.changeRole(id, newRole, auth.getName());
+        return ApiResponse.ok("角色已更新为 " + newRole.name(), null);
+    }
+
+    // ==================== 私有辅助方法 ====================
+
+    /**
+     * 将用户实体转换为响应 DTO
+     */
+    private UserResponse toUserResponse(SysUser user) {
+        return new UserResponse(
+                user.getId(),
+                user.getUsername(),
+                user.getRole().name(),
+                user.getApproved(),
+                user.getApproved(),
+                user.getCreateTime()
+        );
     }
 }

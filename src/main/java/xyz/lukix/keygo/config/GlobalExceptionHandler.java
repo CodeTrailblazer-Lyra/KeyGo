@@ -26,7 +26,9 @@ import xyz.lukix.keygo.common.ApiResponse;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    /** @PreAuthorize / authorizeHttpRequests 抛出的权限拒绝（HTTP 状态码保持 403） */
+    /**
+     * {@code @PreAuthorize} / authorizeHttpRequests 抛出的权限拒绝（HTTP 状态码保持 403）
+     */
     @ExceptionHandler(AccessDeniedException.class)
     @ResponseStatus(HttpStatus.FORBIDDEN)
     public ApiResponse<Void> handleAccessDenied(AccessDeniedException e) {
@@ -34,7 +36,39 @@ public class GlobalExceptionHandler {
         return ApiResponse.error(403, "无权访问");
     }
 
-    /** 其余所有异常：可识别状态码的原样保留（如 404 静态资源缺失、400 请求体解析失败），其余按 500 处理 */
+    /**
+     * 安全异常：权限不足等问题（HTTP 状态码 403）
+     */
+    @ExceptionHandler(SecurityException.class)
+    @ResponseStatus(HttpStatus.FORBIDDEN)
+    public ApiResponse<Void> handleSecurityException(SecurityException e) {
+        log.warn("安全异常: {}", e.getMessage());
+        return ApiResponse.error(403, e.getMessage());
+    }
+
+    /**
+     * 参数异常：业务校验失败（HTTP 状态码 400）
+     */
+    @ExceptionHandler(IllegalArgumentException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiResponse<Void> handleIllegalArgumentException(IllegalArgumentException e) {
+        log.debug("参数异常: {}", e.getMessage());
+        return ApiResponse.error(400, e.getMessage());
+    }
+
+    /**
+     * 资源不存在异常（HTTP 状态码 404）
+     */
+    @ExceptionHandler(ResourceNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public ApiResponse<Void> handleResourceNotFoundException(ResourceNotFoundException e) {
+        log.debug("资源不存在: {}", e.getMessage());
+        return ApiResponse.error(404, e.getMessage());
+    }
+
+    /**
+     * 其余所有异常：可识别状态码的原样保留（如 404 静态资源缺失、400 请求体解析失败），其余按 500 处理
+     */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleOther(HttpServletRequest request, Exception e) {
         HttpStatusCode status = resolveStatus(e);
@@ -65,5 +99,14 @@ public class GlobalExceptionHandler {
             return HttpStatus.valueOf(rs.code().value());
         }
         return HttpStatus.INTERNAL_SERVER_ERROR;
+    }
+
+    /**
+     * 自定义资源不存在异常
+     */
+    public static class ResourceNotFoundException extends RuntimeException {
+        public ResourceNotFoundException(String message) {
+            super(message);
+        }
     }
 }

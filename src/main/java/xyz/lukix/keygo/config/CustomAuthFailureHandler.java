@@ -59,16 +59,7 @@ public class CustomAuthFailureHandler implements AuthenticationFailureHandler {
         if (exception instanceof DisabledException) {
             Optional<SysUser> userOpt = sysUserRepository.findByUsername(username);
             if (userOpt.isPresent()) {
-                SysUser user = userOpt.get();
-                if (!user.getApproved()) {
-                    if (Boolean.TRUE.equals(user.getEnabled())) {
-                        errorMsg = "账号还在审核中，请等待管理员审核通过";
-                    } else {
-                        errorMsg = "审核未通过，请联系管理员";
-                    }
-                } else {
-                    errorMsg = "账号已被禁用";
-                }
+                errorMsg = "账号尚未通过审核，请联系管理员";
             } else {
                 errorMsg = "用户名或密码错误";
             }

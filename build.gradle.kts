@@ -16,6 +16,14 @@ java {
     targetCompatibility = JavaVersion.VERSION_25
 }
 
+// ---------------------------------------------------------------------------
+// 覆盖 Spring Boot BOM 管理的依赖版本（修复已知 CVE 安全漏洞）
+// ---------------------------------------------------------------------------
+// Tomcat      CVE-2026-101296 (JNDI Realm 认证绕过)
+ext["tomcat.version"] = "11.0.27"
+// Logback     CVE-2026-19880 (路径穿越) / CVE-2026-13006
+ext["logback.version"] = "1.6.3"
+
 repositories {
     mavenCentral()
 }
@@ -36,7 +44,7 @@ dependencies {
     annotationProcessor("org.projectlombok:lombok")
 
     developmentOnly("org.springframework.boot:spring-boot-devtools")
-    runtimeOnly("org.postgresql:postgresql")
+    runtimeOnly("org.postgresql:postgresql:42.7.14")  // CVE-2026-107314 / CVE-2026-107315
 
     // 统一测试套件，替代一堆零散test starter
     testImplementation("org.springframework.boot:spring-boot-starter-test")
@@ -66,6 +74,35 @@ tasks.jar {
 }
 
 // 编译统一UTF-8编码，避免Windows中文乱码
+configurations.all {
+    resolutionStrategy {
+        // ------------------------------------------------------------------
+        // 覆盖 Spring Boot BOM（含 jackson-bom）管理的依赖版本，修复已知 CVE
+        // ------------------------------------------------------------------
+        // 使用 eachDependency 拦截所有版本选择请求，优先级高于 BOM constraints
+        //
+        // Jackson 2.x  CVE-2026-110879 (RCE 泛型参数验证绕过) / CVE-2026-91777 (DoS)
+        // 注意：jackson-annotations 从 2.20 起不再发布 patch 版本，仅有 minor 版本（2.21/2.22）
+        val jackson2Version = "2.22.4"
+        val jacksonAnnotationsVersion = "2.22"
+        // Jackson 3.x  CVE-2026-110879 (RCE 泛型参数验证绕过) / CVE-2026-91777 (DoS)
+        val jackson3Version = "3.2.4"
+
+        eachDependency {
+            val group = requested.group
+            val name = requested.name
+            when {
+                // jackson-annotations 使用独立的 minor 版本（无 patch 版本）
+                // Spring Boot 4.1.1 的 jackson-2-bom:2.21.5 将 annotations 约束在 2.21，
+                // 但 jackson-databind:2.22.4 需要 annotations:2.22 中的 JsonApplyView 类
+                group == "com.fasterxml.jackson.core" && name == "jackson-annotations" -> useVersion(jacksonAnnotationsVersion)
+                group == "com.fasterxml.jackson.core" -> useVersion(jackson2Version)
+                group == "tools.jackson.core" -> useVersion(jackson3Version)
+            }
+        }
+    }
+}
+
 tasks.withType<JavaCompile> {
     options.encoding = "UTF-8"
     options.compilerArgs.addAll(listOf("-Xlint:all,-processing"))

@@ -1,15 +1,14 @@
 package xyz.lukix.keygo.entity;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.Data;
 import org.hibernate.annotations.CreationTimestamp;
+import xyz.lukix.keygo.common.AppConstants;
 import java.time.LocalDateTime;
 
 @Data
 @Entity
 @Table(name = "activation_code", indexes = {
-        // 状态筛选/统计走 used；"我的获取记录"走 fetch_user；列表排序走 fetch_time
         @Index(name = "idx_activation_code_used", columnList = "used"),
         @Index(name = "idx_activation_code_fetch_user", columnList = "fetch_user"),
         @Index(name = "idx_activation_code_fetch_time", columnList = "fetch_time")
@@ -23,22 +22,16 @@ public class ActivationCode {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /** 激活码明文（新码不再写入，仅存 codeHash；存量数据保留明文用于降级匹配核销） */
-    @Column(unique = true, length = 48)
-    private String code;
-
     /**
-     * 明文的 SHA-256 十六进制（64 位）。
-     * 唯一性由 SQL 侧唯一索引 uk_code_hash 保证（多行 NULL 互不冲突）；
-     * 哈希仅用于核销比对，无展示价值，不随任何接口返回
+     * 明文激活码（导入时原样存储，前端展示与核销均使用此值）
      */
-    @JsonIgnore
-    @Column(length = 64)
-    private String codeHash;
+    @Column(name = "code", nullable = false, unique = true, length = AppConstants.MAX_CODE_LENGTH)
+    private String code;
 
     @Column(nullable = false)
     private Boolean used = false;
 
+    /** 领取/核销时间（未使用时为 null） */
     private LocalDateTime fetchTime;
 
     /** 获取人用户名（未获取时为 null） */
@@ -49,15 +42,38 @@ public class ActivationCode {
     @Column(length = 100)
     private String deviceId;
 
-    /** 核销绑定时间 */
-    private LocalDateTime bindTime;
-
-    /** 过期时间（null=永不过期，兼容存量数据） */
+    /** 过期时间（null=永不过期） */
     private LocalDateTime expireTime;
 
     /** 备注（来源/批次/用途） */
     @Column(length = MAX_REMARK_LENGTH)
     private String remark;
+
+    // ==================== 官方联网验证结果（统信 UOS licensequery） ====================
+
+    /** 官方接口返回的 use_status（1=已使用）；null 表示从未验证过 */
+    @Column(name = "official_use_status")
+    private Integer officialUseStatus;
+
+    /** 官方记录的激活/使用时间（由响应 use_time 的 epoch 秒转换） */
+    @Column(name = "official_use_time")
+    private LocalDateTime officialUseTime;
+
+    /** 官方产品名称（响应 name_cn），可用于核对码与产品类型是否匹配 */
+    @Column(name = "official_product", length = 100)
+    private String officialProduct;
+
+    /** 官方记录的激活设备（响应 manu_name + manu_device_name 拼接） */
+    @Column(name = "official_device", length = 200)
+    private String officialDevice;
+
+    /** 官方接口顶层 code（0=查询成功，非 0=码无效或官方侧异常） */
+    @Column(name = "official_code")
+    private Integer officialCode;
+
+    /** 本地最后一次成功向官方发起验证的时间 */
+    @Column(name = "official_checked_at")
+    private LocalDateTime officialCheckedAt;
 
     @CreationTimestamp
     private LocalDateTime createTime;

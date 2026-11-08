@@ -30,7 +30,7 @@ public class AnnouncementService {
     @Transactional(readOnly = true)
     public List<Announcement> listAll() {
         return redisJsonCache.getOrLoad(LIST_CACHE_KEY, LIST_CACHE_TTL, LIST_CACHE_TYPE,
-                () -> announcementRepository.findAllByOrderByPinnedDescCreateTimeDesc());
+                announcementRepository::findAllByOrderByPinnedDescCreateTimeDesc);
     }
 
     /** 发布公告（visible=是否在获取页显示） */

@@ -25,35 +25,23 @@ public interface ActivationCodeRepository extends JpaRepository<ActivationCode, 
     }
 
     /**
-     * 悲观锁方式获取未使用的激活码（按ID升序保证FIFO，取几条由 Pageable 的 size 决定）。
-     * 仅限有明文的码参与申领：生成制新码明文不落库，申领后用户看不到码，故排除
+     * 悲观锁方式获取未使用的激活码（按 ID 升序保证 FIFO，取几条由 Pageable 的 size 决定）
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @QueryHints(@QueryHint(name = "jakarta.persistence.lock.timeout", value = "5000"))
-    @Query("SELECT a FROM ActivationCode a WHERE a.used = false AND a.code IS NOT NULL ORDER BY a.id ASC")
+    @Query("SELECT a FROM ActivationCode a WHERE a.used = false ORDER BY a.id ASC")
     List<ActivationCode> findUnusedWithLock(Pageable pageable);
 
     /**
-     * 核销悲观锁查询：按 codeHash 精确匹配未使用的激活码（新码主路径）。
+     * 核销悲观锁查询：按 code 精确匹配未使用的激活码。
      * PG 行锁下并发核销同一码时，后到事务会等锁并在提交后重新校验 used=false，天然防重复核销
-     */
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @QueryHints(@QueryHint(name = "jakarta.persistence.lock.timeout", value = "5000"))
-    @Query("SELECT a FROM ActivationCode a WHERE a.codeHash = :codeHash AND a.used = false")
-    List<ActivationCode> findUnusedByCodeHashForUpdate(@Param("codeHash") String codeHash);
-
-    /**
-     * 核销悲观锁降级查询：按明文 code 匹配（仅存量老数据，新码 code 为 NULL 不会命中）
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @QueryHints(@QueryHint(name = "jakarta.persistence.lock.timeout", value = "5000"))
     @Query("SELECT a FROM ActivationCode a WHERE a.code = :code AND a.used = false")
     List<ActivationCode> findUnusedByCodeForUpdate(@Param("code") String code);
-
-    /** 按 codeHash 查询（不加锁，用于区分"不存在"与"已被核销"） */
-    Optional<ActivationCode> findByCodeHash(String codeHash);
-
-    /** 按明文 code 查询（不加锁，存量数据） */
+    
+    /** 按 code 查询（不加锁，用于区分“不存在”与“已被核销”） */
     Optional<ActivationCode> findByCode(String code);
 
     /**
@@ -62,17 +50,22 @@ public interface ActivationCodeRepository extends JpaRepository<ActivationCode, 
     List<ActivationCode> findByUsedOrderByCreateTimeDesc(boolean used);
 
     /**
-     * 查询所有激活码（按ID升序，匹配插入顺序）
+     * 查询所有激活码（按 ID 升序，匹配插入顺序）
      */
     List<ActivationCode> findAllByOrderByIdAsc();
 
     /**
-     * 分页查询所有激活码（未使用在前按ID升序，已使用在后按最后使用时间倒序）
+     * 查询全部已申领/已使用的激活码（官方状态每日定时同步的范围）
+     */
+    List<ActivationCode> findByUsedTrueOrderByIdAsc();
+
+    /**
+     * 分页查询所有激活码（未使用在前按 ID 升序，已使用在后按最后使用时间倒序）
      */
     Page<ActivationCode> findAllByOrderByUsedAscFetchTimeDescIdAsc(Pageable pageable);
 
     /**
-     * 分页按状态查询激活码（未使用按ID升序）
+     * 分页按状态查询激活码（未使用按 ID 升序）
      */
     Page<ActivationCode> findByUsedOrderByIdAsc(boolean used, Pageable pageable);
 
@@ -82,9 +75,9 @@ public interface ActivationCodeRepository extends JpaRepository<ActivationCode, 
     Page<ActivationCode> findByUsedOrderByFetchTimeDesc(boolean used, Pageable pageable);
 
     /**
-     * 分页按激活码代码模糊搜索（按ID升序）
+     * 按备注模糊搜索（管理端关键字搜索，替代原明文激活码搜索）
      */
-    Page<ActivationCode> findByCodeContainingIgnoreCaseOrderByIdAsc(String keyword, Pageable pageable);
+    Page<ActivationCode> findByRemarkContainingIgnoreCaseOrderByIdAsc(String keyword, Pageable pageable);
 
     /**
      * 单次聚合统计（总数/已用数），替代三条 count 查询
@@ -108,11 +101,11 @@ public interface ActivationCodeRepository extends JpaRepository<ActivationCode, 
 
     /**
      * 批量标记为未使用（单条 UPDATE ... WHERE id IN，事务内执行）。
-     * 与单条恢复口径一致：同时清除获取人/设备绑定，避免恢复后仍出现在"我的获取记录"、残留旧设备信息
+     * 与单条恢复口径一致：同时清除获取人/设备绑定，避免恢复后仍出现在“我的获取记录”、残留旧设备信息
      */
     @Modifying
     @Query("UPDATE ActivationCode a SET a.used = false, a.fetchTime = null, a.fetchUser = null, "
-            + "a.deviceId = null, a.bindTime = null WHERE a.id IN :ids")
+            + "a.deviceId = null WHERE a.id IN :ids")
     int markUnusedIn(@Param("ids") Collection<Long> ids);
 
     /**
@@ -123,12 +116,12 @@ public interface ActivationCodeRepository extends JpaRepository<ActivationCode, 
     int deleteIn(@Param("ids") Collection<Long> ids);
 
     /**
-     * 按激活码代码模糊搜索
+     * 按备注模糊搜索（导出用，替代原明文激活码搜索）
      */
-    List<ActivationCode> findByCodeContainingIgnoreCaseOrderByCreateTimeDesc(String keyword);
+    List<ActivationCode> findByRemarkContainingIgnoreCaseOrderByCreateTimeDesc(String keyword);
 
     /**
-     * 批量查询已存在的激活码记录（导入前去重）
+     * 批量查询已存在的激活码记录（导入前去重，按 code 匹配）
      */
     List<ActivationCode> findByCodeIn(Collection<String> codes);
 }

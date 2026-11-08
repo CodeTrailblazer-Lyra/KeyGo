@@ -19,9 +19,9 @@ public class ActivationLog {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /** 被核销激活码的 SHA-256 哈希（无法定位到具体码时为输入明文的哈希，仅排查用） */
-    @Column(length = 64)
-    private String codeHash;
+    /** 被核销的激活码明文（无法定位到具体码时为输入的原始值，仅排查用） */
+    @Column(name = "code", length = 200)
+    private String code;
 
     /** 发起核销的设备标识 */
     @Column(length = 100)

@@ -142,7 +142,7 @@ public class SecurityConfig {
                 "username", authentication.getName(),
                 "role", authentication.getAuthorities().stream()
                         .map(GrantedAuthority::getAuthority)
-                        .filter(a -> a.startsWith("ROLE_"))
+                        .filter(a -> a != null && a.startsWith("ROLE_"))
                         .findFirst()
                         .orElse("ROLE_USER"))));
     }

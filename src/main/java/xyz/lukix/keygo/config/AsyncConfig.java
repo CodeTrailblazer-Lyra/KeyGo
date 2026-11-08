@@ -30,4 +30,21 @@ public class AsyncConfig {
         executor.setAwaitTerminationSeconds(10);
         return executor;
     }
+
+    /**
+     * 官方授权查询专用线程池：批量验证是长时间的外呼任务，单独隔离避免占满审计池；
+     * 单线程保证对官方接口串行请求，叠加请求间隔避免被限流。
+     * 队列仅用于容纳排队的批次任务，应用关闭时不等待（验证为尽力而作，下轮定时会补齐）
+     */
+    @Bean("licenseCheckExecutor")
+    public Executor licenseCheckExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(1);
+        executor.setMaxPoolSize(1);
+        executor.setQueueCapacity(4);
+        executor.setThreadNamePrefix("license-check-");
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
+        executor.setWaitForTasksToCompleteOnShutdown(false);
+        return executor;
+    }
 }

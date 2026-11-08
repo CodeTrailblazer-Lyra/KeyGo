@@ -1,13 +1,35 @@
+# =============================================================================
+# KeyGo 开发环境配置（profile: dev）
+# =============================================================================
+
 spring:
   config:
     activate:
       on-profile: dev
+
+  # ---------------------------------------------------------------------------
+  # 数据源：本地 Docker PostgreSQL
+  # ---------------------------------------------------------------------------
   datasource:
-    name: Docker_PostgreSQL
     url: jdbc:postgresql://localhost:5432/keygo
     username: postgres
-    password: "admin"
+    password: admin
     driver-class-name: org.postgresql.Driver
+
+  # ---------------------------------------------------------------------------
+  # Redis：本地 Docker Redis
+  # ---------------------------------------------------------------------------
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password:
+      timeout: 1s
+      connect-timeout: 1s
+
+  # ---------------------------------------------------------------------------
+  # JPA：开发期自动建表 + SQL 日志输出
+  # ---------------------------------------------------------------------------
   jpa:
     hibernate:
       ddl-auto: update
@@ -15,16 +37,21 @@ spring:
     properties:
       hibernate:
         format_sql: true
+
+# ---------------------------------------------------------------------------
+# 日志：开发期详细输出
+# ---------------------------------------------------------------------------
 logging:
   level:
     root: INFO
     org.hibernate.SQL: DEBUG
-    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+    org.hibernate.orm.jdbc.bind: TRACE     # SQL 参数绑定值（替代已弃用的 BasicBinder）
     org.springframework.web: DEBUG
     xyz.lukix.keygo: DEBUG
 
-# Remember-Me 签名密钥：dev 使用 SecurityConfig 中的默认值即可；
-# 生产环境通过环境变量 KEYGO_SECURITY_REMEMBER_ME_KEY 覆盖（见 application-prod.yaml）
+# ---------------------------------------------------------------------------
+# 开发环境 Remember-Me 密钥（代码中已有默认值，此处显式声明便于定位）
+# ---------------------------------------------------------------------------
 keygo:
   security:
-    # remember-me-key: your-random-key
+    remember-me-key: KeyGoRememberMeKeyDev

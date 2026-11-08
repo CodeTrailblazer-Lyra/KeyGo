@@ -3,17 +3,16 @@ package xyz.lukix.keygo.service;
 import xyz.lukix.keygo.entity.ActivationCode;
 
 import org.springframework.data.domain.Page;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
 public interface ActivationCodeService {
 
     /**
-     * 设备核销激活码：SHA-256 匹配（hash 优先、明文降级），行锁防重复核销，
-     * 成功后标记已使用并绑定设备；clientIp 仅用于异步审计
+     * 设备核销激活码：直接使用传入的明文 code 与库中 code 匹配，
+     * 行锁防重复核销，成功后标记已使用并绑定设备；clientIp 仅用于异步审计
      */
-    RedeemResult redeem(String rawCode, String deviceId, String clientIp);
+    RedeemResult redeem(String code, String deviceId, String clientIp);
 
     /** 核销结果状态（INVALID 同时覆盖输入非法与码不存在，供对外统一话术） */
     enum RedeemStatus { SUCCESS, INVALID, ALREADY_USED, EXPIRED }
@@ -66,9 +65,9 @@ public interface ActivationCodeService {
     Optional<ActivationCode> findById(Long id);
 
     /**
-     * 按激活码字符串搜索
+     * 按备注关键字搜索
      */
-    List<ActivationCode> searchByCode(String keyword);
+    List<ActivationCode> searchByRemark(String keyword);
 
     /**
      * 分页查询指定用户获取过的激活码（我的获取记录，按获取时间倒序）
@@ -81,8 +80,9 @@ public interface ActivationCodeService {
     void updateRemark(Long id, String remark);
 
     /**
-     * 批量导入激活码（每项为 {code, remark}，remark 可为 null）；
-     * 自动跳过空行、文件内重复与库内已存在的 code
+     * 批量导入激活码（每项为 {code, used, fetchUser, remark}，后三项可为 null）；
+     * 明文激活码原样存储，系统不加密不哈希。
+     * 自动跳过空行、文件内重复与库内已存在的激活码
      */
     ImportResult batchImportCodes(List<String[]> rows);
 

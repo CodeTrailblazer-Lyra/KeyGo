@@ -2,6 +2,7 @@ package xyz.lukix.keygo.config;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.jspecify.annotations.NonNull;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -39,8 +40,9 @@ public class CustomRememberMeServices extends PersistentTokenBasedRememberMeServ
     }
 
     @Override
-    protected UserDetails processAutoLoginCookie(String[] cookieTokens, HttpServletRequest request,
-                                                 HttpServletResponse response)
+    protected @NonNull UserDetails processAutoLoginCookie(@NonNull String[] cookieTokens,
+                                                          @NonNull HttpServletRequest request,
+                                                          @NonNull HttpServletResponse response)
             throws RememberMeAuthenticationException, UsernameNotFoundException {
         try {
             if (cookieTokens.length != 2) {
