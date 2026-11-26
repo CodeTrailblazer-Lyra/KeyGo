@@ -40,8 +40,6 @@ public class SchemaMigration {
 
     /**
      * 执行所有一次性 Schema 迁移。
-     * <p>
-     * 每条迁移语句独立 try-catch，确保单条失败不影响其余迁移。
      */
     @PostConstruct
     public void migrate() {
@@ -84,14 +82,25 @@ public class SchemaMigration {
      * @param type   列类型（含长度）
      */
     private void ensureColumn(String table, String column, String type) {
-        try {
-            if (!columnExists(table, column)) {
-                jdbc.execute("ALTER TABLE " + table + " ADD COLUMN " + column + " " + type);
-                log.info("迁移：新增列 {}.{}", table, column);
-            }
-        } catch (Exception e) {
-            log.warn("迁移 {}.{} 执行异常（可能已处于目标状态）：{}", table, column, e.getMessage());
+        if (!tableExists(table) || columnExists(table, column)) {
+            return;
         }
+        jdbc.execute("ALTER TABLE " + table + " ADD COLUMN IF NOT EXISTS " + column + " " + type);
+        log.info("迁移：新增列 {}.{}", table, column);
+    }
+
+    /**
+     * 判断表是否存在。
+     */
+    private boolean tableExists(String table) {
+        Boolean exists = jdbc.queryForObject(
+                "SELECT EXISTS ("
+                        + "  SELECT 1 FROM information_schema.tables"
+                        + "  WHERE table_schema = current_schema() AND table_name = ?"
+                        + ")",
+                Boolean.class,
+                table);
+        return Boolean.TRUE.equals(exists);
     }
 
     /**
@@ -101,7 +110,8 @@ public class SchemaMigration {
         Boolean exists = jdbc.queryForObject(
                 "SELECT EXISTS ("
                         + "  SELECT 1 FROM information_schema.columns"
-                        + "  WHERE table_name = ? AND column_name = ?"
+                        + "  WHERE table_schema = current_schema()"
+                        + "    AND table_name = ? AND column_name = ?"
                         + ")",
                 Boolean.class,
                 table, column);
@@ -117,34 +127,23 @@ public class SchemaMigration {
      * @param newType   目标类型（含长度），用于 ALTER COLUMN ... TYPE
      */
     private void renameColumnIfPresent(String table, String oldColumn, String newColumn, String newType) {
-        try {
-            Boolean oldExists = jdbc.queryForObject(
-                    "SELECT EXISTS ("
-                            + "  SELECT 1 FROM information_schema.columns"
-                            + "  WHERE table_name = ? AND column_name = ?"
-                            + ")",
-                    Boolean.class,
-                    table, oldColumn);
+        if (!tableExists(table)) {
+            return;
+        }
 
-            Boolean newExists = jdbc.queryForObject(
-                    "SELECT EXISTS ("
-                            + "  SELECT 1 FROM information_schema.columns"
-                            + "  WHERE table_name = ? AND column_name = ?"
-                            + ")",
-                    Boolean.class,
-                    table, newColumn);
+        boolean oldExists = columnExists(table, oldColumn);
+        boolean newExists = columnExists(table, newColumn);
 
-            if (Boolean.TRUE.equals(oldExists) && !Boolean.TRUE.equals(newExists)) {
-                jdbc.execute("ALTER TABLE " + table + " RENAME COLUMN " + oldColumn + " TO " + newColumn);
-                log.info("迁移：{}.{} → {}", table, oldColumn, newColumn);
-            } else {
-                log.debug("迁移跳过：{}.{} 无需重命名（旧列不存在或新列已存在）", table, oldColumn);
-            }
+        if (oldExists && !newExists) {
+            jdbc.execute("ALTER TABLE " + table + " RENAME COLUMN " + oldColumn + " TO " + newColumn);
+            newExists = true;
+            log.info("迁移：{}.{} → {}", table, oldColumn, newColumn);
+        } else {
+            log.debug("迁移跳过：{}.{} 无需重命名（旧列不存在或新列已存在）", table, oldColumn);
+        }
 
-            // 统一调整列类型（幂等：已是目标类型时 PostgreSQL 忽略）
+        if (newExists) {
             jdbc.execute("ALTER TABLE " + table + " ALTER COLUMN " + newColumn + " TYPE " + newType);
-        } catch (Exception e) {
-            log.warn("迁移 {}.{} 执行异常（可能已处于目标状态）：{}", table, oldColumn, e.getMessage());
         }
     }
 }

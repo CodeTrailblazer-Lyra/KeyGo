@@ -19,10 +19,12 @@ java {
 // ---------------------------------------------------------------------------
 // 覆盖 Spring Boot BOM 管理的依赖版本（修复已知 CVE 安全漏洞）
 // ---------------------------------------------------------------------------
-// Tomcat      CVE-2026-101296 (JNDI Realm 认证绕过)
-ext["tomcat.version"] = "11.0.27"
-// Logback     CVE-2026-19880 (路径穿越) / CVE-2026-13006
-ext["logback.version"] = "1.6.3"
+// Tomcat      CVE-2026-101296 等（11.0.29 修复 11.0.27 受影响问题；11.0.30 尚未发布）
+ext["tomcat.version"] = "11.0.29"
+// Logback     CVE-2026-19880 / CVE-2026-104721（路径穿越，1.6.5 修复）
+ext["logback.version"] = "1.6.5"
+// Netty       CVE-2026 系列（netty-handler mTLS 绕过、netty-buffer 越界读等）
+ext["netty.version"] = "4.2.20.Final"
 
 repositories {
     mavenCentral()
@@ -56,6 +58,8 @@ dependencies {
 
     // 统一测试套件，替代一堆零散test starter
     testImplementation("org.springframework.boot:spring-boot-starter-test")
+    // android-json 无修复版本，改用维护中的 org.json:json（jsonassert 兼容）
+    testImplementation("org.json:json:20260814")
     // MockMvc / @AutoConfigureMockMvc（Boot 4 起位于 webmvc 专属测试 starter）
     testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
     testImplementation("org.springframework.security:spring-security-test")
@@ -83,6 +87,8 @@ tasks.jar {
 
 // 编译统一UTF-8编码，避免Windows中文乱码
 configurations.all {
+    // android-json 无修复版本，统一替换为 org.json:json（见测试依赖）
+    exclude(group = "com.vaadin.external.google", module = "android-json")
     resolutionStrategy {
         // ------------------------------------------------------------------
         // 覆盖 Spring Boot BOM（含 jackson-bom）管理的依赖版本，修复已知 CVE
@@ -95,6 +101,8 @@ configurations.all {
         val jacksonAnnotationsVersion = "2.22"
         // Jackson 3.x  CVE-2026-110879 (RCE 泛型参数验证绕过) / CVE-2026-91777 (DoS)
         val jackson3Version = "3.2.4"
+        // ASM  CVE-2026-110257（测试依赖 accessors-smart 的传递依赖）
+        val asmVersion = "9.11"
 
         eachDependency {
             val group = requested.group
@@ -106,6 +114,7 @@ configurations.all {
                 group == "com.fasterxml.jackson.core" && name == "jackson-annotations" -> useVersion(jacksonAnnotationsVersion)
                 group == "com.fasterxml.jackson.core" -> useVersion(jackson2Version)
                 group == "tools.jackson.core" -> useVersion(jackson3Version)
+                group == "org.ow2.asm" -> useVersion(asmVersion)
             }
         }
     }
